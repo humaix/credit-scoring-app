@@ -1,0 +1,19 @@
+Feature                                        , MeanAbsSHAP
+monthly_income                                 , 5.332926
+debt_to_income_ratio                           , 5.309127
+loan_size                                      , 5.084711
+psychometric_score                             , 2.878178
+mobile_wallet_activity                         , 2.7844274
+telecom_usage_score                            , 2.6131005
+existing_loan_history_Good Repayment History   , 2.5114245
+digital_purchase_frequency                     , 0.9571056
+existing_loan_history_Delayed Repayment History, 0.9506116
+existing_loan_history_Previous Default         , 0.8237589
+occupation_Daily Wage Worker                   , 0.62899745
+occupation_Salaried                            , 0.5793252
+age                                            , 0.39936265
+existing_loan_history_No Previous Loan         , 0.31100395
+occupation_Business Owner                      , 0.10969468
+occupation_Other                               , 0.09280627
+occupation_Freelancer                          , 0.046642195
+occupation_Self-Employed                       , 0.022587135

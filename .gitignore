@@ -1,0 +1,27 @@
+# secrets - never commit
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# databases (runtime state)
+*.db
+*.sqlite3
+
+# generated outputs (regenerable at runtime)
+explainability/generated_reports/
+backend/reports/
+
+# node / next.js
+node_modules/
+.next/
+out/
+dist/
+
+# os noise
+Thumbs.db
+.DS_Store

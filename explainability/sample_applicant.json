@@ -1,0 +1,12 @@
+{
+  "age": 33,
+  "occupation": "Freelancer",
+  "monthly_income": 55000,
+  "existing_loan_history": "Delayed Repayment History",
+  "debt_to_income_ratio": 0.38,
+  "loan_size": 420000,
+  "telecom_usage_score": 0.71,
+  "mobile_wallet_activity": 0.64,
+  "digital_purchase_frequency": 6,
+  "psychometric_score": 62.5
+}

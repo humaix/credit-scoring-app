@@ -1,0 +1,232 @@
+{
+  "best_model": "XGBoost",
+  "best_params": {
+    "model__subsample": 0.8,
+    "model__reg_lambda": 1.0,
+    "model__reg_alpha": 0.01,
+    "model__n_estimators": 600,
+    "model__min_child_weight": 5,
+    "model__max_depth": 4,
+    "model__learning_rate": 0.03,
+    "model__colsample_bytree": 0.7
+  },
+  "final_test": {
+    "MAE": 7.345124341318607,
+    "RMSE": 9.080542143637823,
+    "R2": 0.7170863824677247
+  },
+  "final_train": {
+    "MAE": 6.43112174778223,
+    "RMSE": 8.058816247526336,
+    "R2": 0.7785657429964368
+  },
+  "gap_r2": 0.06147936052871206,
+  "final_cv": {
+    "mae": [
+      7.608813582763672,
+      0.15246715806622307
+    ],
+    "rmse": [
+      9.492718807584842,
+      0.12892829941865597
+    ],
+    "r2": [
+      0.6925476610896377,
+      0.009972485053881751
+    ]
+  },
+  "test_metrics": {
+    "Mean Baseline": {
+      "MAE": 13.978413431249999,
+      "RMSE": 17.080519105509907,
+      "R2": -0.0009961939623381877
+    },
+    "Linear Regression": {
+      "MAE": 7.779646702068014,
+      "RMSE": 9.567193720344736,
+      "R2": 0.685949542182518
+    },
+    "Decision Tree": {
+      "MAE": 9.72427085401972,
+      "RMSE": 12.180997989448098,
+      "R2": 0.49090827458887176
+    },
+    "Random Forest": {
+      "MAE": 7.946774093683354,
+      "RMSE": 9.75439137043317,
+      "R2": 0.6735394947965598
+    },
+    "Gradient Boosting": {
+      "MAE": 7.581097266788218,
+      "RMSE": 9.34744010916647,
+      "R2": 0.7002110109074035
+    },
+    "XGBoost": {
+      "MAE": 7.436987899408341,
+      "RMSE": 9.208575482142995,
+      "R2": 0.7090521180969578
+    }
+  },
+  "train_r2": {
+    "Mean Baseline": 0.0,
+    "Linear Regression": 0.671505494183483,
+    "Decision Tree": 0.7437649573155335,
+    "Random Forest": 0.933136952634703,
+    "Gradient Boosting": 0.7272960108072193,
+    "XGBoost": 0.8342160545072395
+  },
+  "cv": {
+    "Linear Regression": {
+      "Model": "Linear Regression",
+      "CV MAE": 7.899604653922795,
+      "CV MAE std": 0.11507448252128902,
+      "CV RMSE": 9.837260623315334,
+      "CV RMSE std": 0.1417631870189765,
+      "CV R2": 0.6697926225093246,
+      "CV R2 std": 0.011887290406127841
+    },
+    "Decision Tree": {
+      "Model": "Decision Tree",
+      "CV MAE": 10.098186938418579,
+      "CV MAE std": 0.24569129100792889,
+      "CV RMSE": 12.671566437137518,
+      "CV RMSE std": 0.3370712258568899,
+      "CV R2": 0.4519100063718876,
+      "CV R2 std": 0.029675651150845302
+    },
+    "Random Forest": {
+      "Model": "Random Forest",
+      "CV MAE": 8.208200138950668,
+      "CV MAE std": 0.2195870850184443,
+      "CV RMSE": 10.18305169556268,
+      "CV RMSE std": 0.22013006148217062,
+      "CV R2": 0.646097931278641,
+      "CV R2 std": 0.016641096460696347
+    },
+    "Gradient Boosting": {
+      "Model": "Gradient Boosting",
+      "CV MAE": 7.847826363254271,
+      "CV MAE std": 0.2080205562802171,
+      "CV RMSE": 9.724791537706016,
+      "CV RMSE std": 0.16559474644253164,
+      "CV R2": 0.6773078467267702,
+      "CV R2 std": 0.012185266345739512
+    },
+    "XGBoost": {
+      "Model": "XGBoost",
+      "CV MAE": 7.700527776751518,
+      "CV MAE std": 0.17037422638611735,
+      "CV RMSE": 9.609814028252895,
+      "CV RMSE std": 0.15315723553296567,
+      "CV R2": 0.684874542476335,
+      "CV R2 std": 0.012023218105936689
+    }
+  },
+  "baseline": {
+    "MAE": 13.978413431249999,
+    "RMSE": 17.080519105509907,
+    "R2": -0.0009961939623381877
+  },
+  "improvement_mae_pct": 47.45380527307969,
+  "pred": {
+    "min": 1.8466535806655884,
+    "max": 98.48770904541016,
+    "mean": 58.57035827636719,
+    "n_below_0": 0,
+    "n_above_100": 0
+  },
+  "gain_top": [
+    [
+      "existing_loan_history_Previous Default",
+      0.2274443656206131
+    ],
+    [
+      "existing_loan_history_Delayed Repayment History",
+      0.21824881434440613
+    ],
+    [
+      "existing_loan_history_No Previous Loan",
+      0.12741197645664215
+    ],
+    [
+      "existing_loan_history_Good Repayment History",
+      0.08239603042602539
+    ],
+    [
+      "debt_to_income_ratio",
+      0.07633693516254425
+    ],
+    [
+      "monthly_income",
+      0.06358271092176437
+    ],
+    [
+      "psychometric_score",
+      0.03483235463500023
+    ],
+    [
+      "loan_size",
+      0.03414727374911308
+    ],
+    [
+      "telecom_usage_score",
+      0.02711055800318718
+    ],
+    [
+      "mobile_wallet_activity",
+      0.024314403533935547
+    ]
+  ],
+  "shap_top": [
+    [
+      "monthly_income",
+      5.332925796508789
+    ],
+    [
+      "debt_to_income_ratio",
+      5.309126853942871
+    ],
+    [
+      "loan_size",
+      5.084711074829102
+    ],
+    [
+      "psychometric_score",
+      2.8781778812408447
+    ],
+    [
+      "mobile_wallet_activity",
+      2.7844274044036865
+    ],
+    [
+      "telecom_usage_score",
+      2.613100528717041
+    ],
+    [
+      "existing_loan_history_Good Repayment History",
+      2.5114245414733887
+    ],
+    [
+      "digital_purchase_frequency",
+      0.9571055769920349
+    ],
+    [
+      "existing_loan_history_Delayed Repayment History",
+      0.9506115913391113
+    ],
+    [
+      "existing_loan_history_Previous Default",
+      0.8237589001655579
+    ]
+  ],
+  "tuned_cv_rmse": {
+    "XGBoost": 9.492718807584842,
+    "Gradient Boosting": 9.522900650633181,
+    "Random Forest": 10.122876506332743
+  },
+  "candidates": [
+    "XGBoost",
+    "Gradient Boosting",
+    "Random Forest"
+  ]
+}

@@ -1,0 +1,295 @@
+==============================================================================
+DATASET REPORT - Synthetic Credit Scoring Dataset (Pakistan)
+Replicates Khan et al. (2025), Table 4.1 calibration, continuous target
+Reproducible with random_state = 42
+==============================================================================
+
+1. DATASET OVERVIEW
+------------------------------------------------------------------------------
+Number of rows      : 10000
+Number of columns   : 15
+Missing values      : 0
+Duplicate rows      : 0 (full row, incl. borrower_id)
+                      0 (excluding borrower_id)
+
+Column roles:
+  ID          : borrower_id
+  PREDICTORS  : age, occupation, monthly_income, existing_loan_history
+                (loan_history_code = numeric encoding of it),
+                debt_to_income_ratio, loan_size, telecom_usage_score,
+                mobile_wallet_activity, digital_purchase_frequency,
+                psychometric_score
+  DEMOGRAPHIC : gender, province  (NON-predictive, fairness audit only;
+                generated independently of every other column and target)
+  TARGET      : repayment_score  (continuous, 0-100)
+
+Data types:
+  borrower_id                  object
+  age                          int64
+  occupation                   object
+  monthly_income               int64
+  existing_loan_history        object
+  loan_history_code            int64
+  debt_to_income_ratio         float64
+  loan_size                    int64
+  telecom_usage_score          float64
+  mobile_wallet_activity       float64
+  digital_purchase_frequency   int64
+  psychometric_score           float64
+  gender                       object
+  province                     object
+  repayment_score              float64
+
+2. CALIBRATION vs PAPER (Table 4.1)
+------------------------------------------------------------------------------
+Variable                Paper mean/std/min/max                Generated                             
+Age (years)             37.6 / 9.5 / 18 / 65                  37.7 / 9.3 / 18.0 / 65.0              
+Monthly Income (PKR)    68,450 / 29,800 / 15,000 / 250,000    68,380 / 29,202 / 15,000 / 250,000    
+Loan Size (PKR)         520,000 / 180,000 / 50,000 / 1,200,000519,629 / 180,317 / 50,296 / 1,200,000
+Telecom Usage Score     0.61 / 0.14 / 0.20 / 0.98             0.610 / 0.140 / 0.200 / 0.980         
+Mobile Wallet Activity  0.53 / 0.19 / 0.10 / 0.95             0.530 / 0.189 / 0.100 / 0.950         
+(No paper statistics exist for DTI, psychometric score, digital
+ purchase frequency or the repayment score - see assumptions.)
+
+3. DESCRIPTIVE STATISTICS
+------------------------------------------------------------------------------
+Variable                            Mean         Std         Min      Median         Max
+age                               37.670       9.315      18.000      38.000      65.000
+monthly_income                 68379.928   29202.497   15000.000   63321.500  250000.000
+debt_to_income_ratio               0.181       0.127       0.010       0.162       0.681
+loan_size                     519629.095  180317.088   50296.000  494989.000 1200000.000
+telecom_usage_score                0.610       0.140       0.200       0.615       0.980
+mobile_wallet_activity             0.530       0.189       0.100       0.535       0.950
+digital_purchase_frequency         5.259       7.674       0.000       3.000      45.000
+psychometric_score                58.049      15.533       3.100      58.000      97.000
+repayment_score                   58.129      17.117       2.270      60.005      97.150
+
+4. RELATIONSHIP ANALYSIS (correlation with repayment_score)
+------------------------------------------------------------------------------
+Predictor                    Pearson r  Spearman   Expected                  Verdict
+monthly_income                   0.384     0.404   +                         PASS
+debt_to_income_ratio            -0.486    -0.440   -                         PASS
+telecom_usage_score              0.300     0.290   +                         PASS
+mobile_wallet_activity           0.300     0.297   +                         PASS
+digital_purchase_frequency       0.254     0.338   + (weak, nonlinear)       PASS
+psychometric_score               0.341     0.334   +                         PASS
+loan_size                       -0.035    -0.020   - (weak, via burden)      PASS
+age                             -0.036    -0.030   ~ 0 (weak)                PASS
+
+Derived loan burden (loan_size / annual income) vs score: r = -0.453
+
+Key feature-feature correlations (spec section 15):
+  monthly_income <-> loan_size           : +0.430  (loans track income)
+  monthly_income <-> debt_to_income_ratio: -0.132  (poorer borrowers more indebted)
+  mobile_wallet_activity <-> digital_purchase_frequency: +0.611  (wallet use drives digital spending)
+  loan_size <-> debt_to_income_ratio     : -0.270  (heavily indebted qualify for smaller loans)
+Interpretations (right column) hold by construction; all learned from
+the generation mechanism documented in section 9.
+
+5. OCCUPATION ANALYSIS
+------------------------------------------------------------------------------
+Occupation            Count   Share   Mean income  Mean DTI  Mean score
+Business Owner         1825   18.2%        90,246     0.166       62.96
+Salaried               2169   21.7%        69,275     0.179       60.56
+Self-Employed          2548   25.5%        71,933     0.176       59.01
+Freelancer              833    8.3%        67,367     0.184       56.79
+Other                   601    6.0%        57,731     0.188       55.27
+Daily Wage Worker      2024   20.2%        46,811     0.197       51.46
+
+6. LOAN HISTORY ANALYSIS
+------------------------------------------------------------------------------
+Category                      Count   Share  Mean DTI  Mean score
+Good Repayment History         2985   29.8%     0.178       64.85
+No Previous Loan               4686   46.9%     0.104       61.13
+Delayed Repayment History      1641   16.4%     0.310       46.17
+Previous Default                688    6.9%     0.405       37.07
+Encoding: 0=No Previous Loan, 1=Good Repayment History,
+          2=Delayed Repayment History, 3=Previous Default
+
+7. MODERATING EFFECT OF LOAN SIZE (loan burden buckets)
+------------------------------------------------------------------------------
+Loan burden = loan_size / (12 * monthly_income). Mean repayment score
+by burden bucket, split by income half (moderation of income effect):
+Burden bucket        n  Mean score  Lower-inc half  Upper-inc half
+< 0.40            1085       70.15           69.52           70.22
+0.40-0.60         3032       63.40           58.96           65.12
+0.60-0.80         2809       58.01           55.42           61.02
+0.80-1.00         1659       52.42           51.21           56.15
+1.00-1.40         1135       46.18           45.59           50.89
+> 1.40             280       37.93           37.89           42.03
+
+Reading: mean score falls as burden rises; the gap between income
+halves widens at high burden - exactly the moderating role of loan
+size described in the paper (Section 3.4.3).
+
+8. TARGET DISTRIBUTION (repayment_score)
+------------------------------------------------------------------------------
+Band                Count    Share
+0-20   Very low       199     2.0%
+21-40  Low           1431    14.3%
+41-60  Moderate      3370    33.7%
+61-80  High          4114    41.1%
+81-100 Very high      886     8.9%
+
+Share of borrowers with score < 45 (elevated risk): 22.7%
+(Paper's default rate for reference: 22% - the low-score tail is
+ calibrated to echo that risk level.)
+
+Repayment score distribution
+------------------------------------------------------------------------------
+[         2.27 -          7.01)     13  #
+[         7.01 -         11.76)     33  #
+[        11.76 -         16.50)     70  ###
+[        16.50 -         21.25)    136  ######
+[        21.25 -         25.99)    193  ########
+[        25.99 -         30.73)    280  ############
+[        30.73 -         35.48)    393  #################
+[        35.48 -         40.22)    541  ########################
+[        40.22 -         44.97)    607  ##########################
+[        44.97 -         49.71)    739  ################################
+[        49.71 -         54.45)    874  ######################################
+[        54.45 -         59.20)    962  ##########################################
+[        59.20 -         63.94)    999  ###########################################
+[        63.94 -         68.69)   1105  ################################################
+[        68.69 -         73.43)   1033  #############################################
+[        73.43 -         78.17)    849  #####################################
+[        78.17 -         82.92)    651  ############################
+[        82.92 -         87.66)    369  ################
+[        87.66 -         92.41)    136  ######
+[        92.41 -         97.15)     17  #
+
+9. GENERATION ASSUMPTIONS AND FORMULAS
+------------------------------------------------------------------------------
+(z(x) = population-standardized value; sigmoid(x) = 1/(1+e^-x))
+
+1. Demographics
+   - age ~ Normal(37.6, 9.5), clipped to [18, 65], integer.
+   - occupation ~ Categorical{Salaried 22%, Self-Employed 26%,
+     Business Owner 18%, Freelancer 8%, Daily Wage Worker 20%, Other 6%}.
+   - gender (Male 62% / Female 38%) and province (Punjab 53% / Sindh 23% /
+     KP 17% / Balochistan 7%) are generated INDEPENDENTLY of everything
+     else and are NOT among the 10 predictors. They exist only for
+     fairness auditing (fairness by construction).
+
+2. Monthly income (PKR) - log-normal
+   log(income) = N(mu*, sigma*) + occupation_shift + experience(age) + extra
+   - occupation_shift (log scale): Business Owner +0.28, Self-Employed
+     +0.06, Salaried 0.00 (reference), Freelancer -0.05, Other -0.18,
+     Daily Wage Worker -0.38.
+   - experience(age) = -0.025*((age-45)/10)^2, floor -0.35 (income peaks
+     around age 45).
+   - Freelancers receive extra volatility N(0, 0.22) (gig-income risk).
+   - mu*, sigma* chosen so mean = 68,450 and std = 29,800 (paper Table
+     4.1); final values clipped to [15,000, 250,000].
+
+3. Psychometric score (0-100)
+   ~ Normal(58, 15.5) + 1.5*z(log income), clipped to [3, 97].
+
+4. Existing loan history (categorical)
+   - P(has any history) = sigmoid(0.10 + 0.030*(age - 37.6)).
+   - Among those with history, category ~ softmax over a latent
+     responsibility factor r = 0.45*z(psych) + 0.15*z(log income)
+     + 0.55*N(0,1):
+       P(Good)    ~ exp(0.60 + 1.10*r)
+       P(Delayed) ~ exp(0.00 + 0.20*r)
+       P(Default) ~ exp(-1.20 - 0.80*r)
+
+5. Debt-to-income ratio (0-1)
+   DTI = base[history] + 0.055*(1 - income percentile) + N(0, 0.09),
+   base: No Previous Loan 0.07, Good 0.15, Delayed 0.28, Default 0.38,
+   clipped to [0.01, 0.92]. Lower-income and troubled-history borrowers
+   carry more existing debt (as observed in microfinance portfolios).
+
+6. Loan size (PKR) - MODERATING variable
+   log(loan) = log(income) + log(7.2) + N(0, 0.95) + occupation_loan_adj
+               - 0.25*z(DTI)
+   - occupation_loan_adj: Business Owner +0.18, Self-Employed +0.05,
+     Salaried -0.05, Freelancer -0.10, Other -0.15, Daily Wage -0.28.
+   - ~0.6% of borrowers form a micro-loan segment ~ Uniform(50k, 110k),
+     reproducing the paper's ~PKR 50,000 minimum.
+   - mu/sigma are iteratively re-calibrated so the final clipped loan
+     size has mean = 520,000 and std = 180,000 (paper Table 4.1);
+     values clipped to [50,000, 1,200,000].
+
+7. Telecom usage score (0.20-0.98) - Beta(6.79, 4.35)
+   plus tilts +0.020*z(income) +0.020*z(psych) -0.020*z(age),
+   re-standardized to mean 0.61 / std 0.14, clipped to [0.20, 0.98].
+
+8. Mobile wallet activity (0.10-0.95) - Beta(3.13, 2.77)
+   plus tilts +0.035*z(income) -0.040*z(age) +0.020*z(psych),
+   re-standardized to mean 0.53 / std 0.19, clipped to [0.10, 0.95].
+
+9. Digital purchase frequency (purchases/month) - negative binomial
+   lambda = exp(1.10 + 0.90*z(wallet) + 0.35*z(income) - 0.25*z(age)
+                + 0.15*z(psych)); count ~ NegBin(mean=lambda, dispersion 3),
+   capped at 45. Correlated with wallet activity, income, age, psych.
+
+10. Repayment score (target, 0-100) - latent index + logistic squash
+    latent L =
+        0.20*z(log income)                    income capacity (+)
+      - 0.15*z(DTI)                           indebtedness (-)
+      + 0.45*history_effect                   repayment record (+/-)
+              {No: 0, Good: +0.55, Delayed: -0.60, Default: -1.00}
+      + 0.16*z(telecom)                       digital stability (+)
+      + 0.17*z(wallet)                        wallet activity (+)
+      + 0.16*z(psychometric)                  behavioural strength (+)
+      + digital_effect                        INVERTED-U, peaks ~6/month:
+              -0.012*|purchases - 6| + 0.04*min(purchases, 1),
+              clipped to [-0.30, +0.06]
+      + occupation_effect                     Salaried +0.08, Business +0.04,
+              Self-Employed 0.00, Freelancer -0.04, Other -0.06, Wage -0.10
+      - 0.06*((age-42)/23)^2                  very young / senior penalty
+      - 0.24*z(log loan)                      absolute-size repayment friction
+              (bigger loans are harder to repay on their own; also makes loan
+              size a top-ranked feature as in the paper's SHAP analysis)
+      - 0.50*clip(burden - 0.35, 0, 2.6)      LOAN BURDEN (moderator),
+              burden = loan_size / (12 * monthly_income)
+      - 0.26*z(DTI)*clip(burden,0,2.6)/1.25   interaction: high DTI x big loan
+      + 0.12*GoodHistory*relief               interaction: good record buffers
+      - 0.12*DefaultHistory*relief            interaction: default amplifies
+              relief = clip(burden - 0.8, 0, 1.7) / 1.7
+      + N(0, 0.42)                            unobserved factors (noise)
+    repayment_score = 100 * sigmoid(0.58 + 1.00*L), rounded to 2 decimals.
+
+    Moderation examples (spec section 6):
+      - High income + small loan  -> burden low  -> no penalty -> high score
+      - High income + huge loan   -> moderate burden penalty -> somewhat lower
+      - Low income + large loan   -> burden > 1.5 -> heavy penalty, amplified
+        by high DTI and/or bad history -> substantially lower score
+      - Low income + small loan   -> elevated risk (low capacity) but no
+        burden penalty -> moderately low score
+
+10. DATA QUALITY CHECKS
+------------------------------------------------------------------------------
+[PASS] Exactly 10,000 records
+[PASS] Unique borrower IDs
+[PASS] No duplicate rows
+[PASS] No missing values
+[PASS] No negative income
+[PASS] No negative loan sizes
+[PASS] Age within [18, 65]
+[PASS] DTI within [0, 1]
+[PASS] Telecom score within [0.20, 0.98]
+[PASS] Wallet activity within [0.10, 0.95]
+[PASS] Psychometric score within [0, 100]
+[PASS] Repayment score within [0, 100]
+[PASS] Valid occupation categories
+[PASS] Valid loan-history values
+
+Summary: 14/14 checks passed.
+
+11. MACHINE LEARNING READINESS
+------------------------------------------------------------------------------
+Task   : regression / continuous scoring
+Target : repayment_score (continuous, 0-100)
+Split  : none performed here; split later (e.g., 80/20 + 5-fold CV
+         as in the paper's methodology).
+Models : Linear Regression, Random Forest, XGBoost / Gradient
+         Boosting regressors; evaluate with MAE, RMSE, R^2 and
+         predicted-vs-actual correlation.
+Noise  : ~35-40% of latent variance is unobserved-factor noise, so
+         models learn real structure without unrealistic R^2.
+
+==============================================================================
+END OF REPORT
+==============================================================================

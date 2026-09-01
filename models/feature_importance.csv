@@ -1,0 +1,19 @@
+Feature                                        , Importance
+existing_loan_history_Previous Default         , 0.22744437
+existing_loan_history_Delayed Repayment History, 0.21824881
+existing_loan_history_No Previous Loan         , 0.12741198
+existing_loan_history_Good Repayment History   , 0.08239603
+debt_to_income_ratio                           , 0.076336935
+monthly_income                                 , 0.06358271
+psychometric_score                             , 0.034832355
+loan_size                                      , 0.034147274
+telecom_usage_score                            , 0.027110558
+mobile_wallet_activity                         , 0.024314404
+digital_purchase_frequency                     , 0.02422437
+occupation_Daily Wage Worker                   , 0.019345468
+occupation_Salaried                            , 0.015564013
+occupation_Business Owner                      , 0.006157409
+age                                            , 0.0054684523
+occupation_Other                               , 0.0051027844
+occupation_Self-Employed                       , 0.0044285585
+occupation_Freelancer                          , 0.0038835045

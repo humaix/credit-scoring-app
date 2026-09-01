@@ -1,0 +1,32 @@
+features of AI model
+1) Digital wallets activity
+2) mobile easy loads recharge
+3) Psychometric Scores (Behavioral Assessment)
+4) Online shopping pattrens 
+5) utility bills (jis dukaan/mart se samamn liya he wahan ki recipts bhi)
+6) ledger book (hisaab kitaab likhne wali book, or wander se jo maal kharida he uski recipts)
+7) family tree (family me kitne members hn, bache kitne hn, school college jate hn ya nahi? fees kitni he unki) bachon ke fees challans (agar bare hn to unki shadi waghera ke kharche)
+8) previous loans ki kya condition he
+9) vihicals kon konn si hn or unme kitne ka patrol dalta he daily/monthly
+10) shopping expense (agar mall se ya brand se le he to recipt se verify kiya ja sakta he) 
+11) ghar agar apna nahi he to rent (kitna he time pr pay karte hn)
+12) kisi ko zimmedar banana hoga ke agar ye required time me loan repay nahi kar paya to koi or is ke badle ka rent pay kare ya iski gurentee le 
+
+freelancer/bykea riders case:
+
+in ki platform gig (bykea/fiver app ka account) wahan se information le ja sakti he ke inhon ne kitne projects kiye hn or unse kitne paise kamaye
+9) vehicals kon konn si hn or unme kitne ka patrol dalta he daily/monthly  
+
+Final Features :
+1) Monthly Income
+2) Age
+3) Occupation
+4) Existing Loan history
+5) debt to income ratio (person ki income kitni he or us per debt kitna he)
+6) Telecome usage score
+7) Mobile wallet Activity
+8) Digital Purchase frequency pattern
+9) Psychometric Score
+10) Moderating Variable
+
+explainability ke liye sirf detail ya paragraphs generate nahi karna balke AI se 1 report generate kar wani he jis me applicant ki details mention hon or uska repayment socre mention ho, reason bhi mention ho, or agar applicant ne large loan ki request ki thi jis pr uska score low aaya he to usse offer karen ke aap less ammount ke liye offer karen or less ammount ki range bhi batao 

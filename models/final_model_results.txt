@@ -1,0 +1,54 @@
+FINAL CREDIT SCORING MODEL - RESULTS
+====================================
+Final model           : XGBoost (tuned, RandomizedSearchCV cv=5, n_iter=20)
+Best hyperparameters  : {"model__subsample": 0.8, "model__reg_lambda": 1.0, "model__reg_alpha": 0.01, "model__n_estimators": 600, "model__min_child_weight": 5, "model__max_depth": 4, "model__learning_rate": 0.03, "model__colsample_bytree": 0.7}
+
+Cross-validation (5-fold, training data):
+  MAE  : 7.609 +/- 0.152
+  RMSE : 9.493 +/- 0.129
+  R2   : 0.6925 +/- 0.0100
+
+Training set performance:
+  MAE 6.431  RMSE 8.059  R2 0.7786
+Test set performance (single evaluation after model selection):
+  MAE 7.345  RMSE 9.081  R2 0.7171
+Overfitting gap (train R2 - test R2): 0.0615
+
+Mean baseline MAE 13.978 -> final test MAE 7.345 (47.5% lower)
+
+Prediction range on test: [1.85, 98.49], mean 58.57
+Predictions outside [0, 100]: 0 below 0, 0 above 100 (clipped only at application layer)
+
+Top features (model gain importance):
+  1. existing_loan_history_Previous Default (0.2274)
+  2. existing_loan_history_Delayed Repayment History (0.2182)
+  3. existing_loan_history_No Previous Loan (0.1274)
+  4. existing_loan_history_Good Repayment History (0.0824)
+  5. debt_to_income_ratio (0.0763)
+  6. monthly_income (0.0636)
+  7. psychometric_score (0.0348)
+  8. loan_size (0.0341)
+  9. telecom_usage_score (0.0271)
+  10. mobile_wallet_activity (0.0243)
+
+Top features (SHAP mean |value|):
+  1. monthly_income (5.3329)
+  2. debt_to_income_ratio (5.3091)
+  3. loan_size (5.0847)
+  4. psychometric_score (2.8782)
+  5. mobile_wallet_activity (2.7844)
+  6. telecom_usage_score (2.6131)
+  7. existing_loan_history_Good Repayment History (2.5114)
+  8. digital_purchase_frequency (0.9571)
+  9. existing_loan_history_Delayed Repayment History (0.9506)
+  10. existing_loan_history_Previous Default (0.8238)
+
+Limitations / observations:
+- Dataset is synthetic (calibrated to Khan et al. 2025, Table 4.1). Metrics
+  describe performance on generated data only and must NOT be presented as
+  real-world lending performance.
+- Loan burden (loan_size / income) is not a raw feature; the model learns the
+  interaction from splits. An engineered ratio feature may improve results.
+- Regression prototype for a 0-100 repayment score - not a classification
+  system and not a deployment-ready credit decision engine.
+- gender / province kept out of modeling; fairness audit is a separate step.
