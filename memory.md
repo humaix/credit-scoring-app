@@ -3,6 +3,12 @@
 
 ## Project Development Documentation
 
+> **Current state:** this document records the ML prototype stage. The
+> prototype has since been extended into a complete demo product — FastAPI
+> backend, Next.js applicant flow, verification/consent/assessment, 148
+> backend tests and deployment configuration. See **README.md** for the
+> current architecture and **DEPLOYMENT.md** for hosting.
+
 ### 1. Project Overview
 
 This project aims to develop an **AI-based alternative credit scoring system** for applicants who may not have traditional banking or formal credit history.
@@ -613,13 +619,13 @@ They provide:
 Monthly Income: PKR 70,000
 Age: 29
 Occupation: Freelancer
-Existing Loan History: Good
+Existing Loan History: Good Repayment History
 Debt-to-Income Ratio: 0.25
-Telecom Usage Score: 82
-Mobile Wallet Activity: 76
-Digital Purchase Frequency: 64
-Psychometric Score: 78
-Moderating Variable: ...
+Telecom Usage Score: 0.82            (model scale: 0-1)
+Mobile Wallet Activity: 0.76         (model scale: 0-1)
+Digital Purchase Frequency: 18       (purchases per month)
+Psychometric Score: 78               (model scale: 0-100)
+Requested Loan Size: PKR 150,000     (the moderating variable)
 ```
 
 The system processes these values through the saved model.
