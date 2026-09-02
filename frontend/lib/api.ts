@@ -326,7 +326,10 @@ export function formatPKR(value: number): string {
 }
 
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-PK", {
+  // Backend timestamps are naive UTC — append Z when no offset is present
+  // so browsers in other timezones don't shift the date by hours.
+  const normalized = /Z$|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+  return new Date(normalized).toLocaleDateString("en-PK", {
     day: "numeric",
     month: "short",
     year: "numeric",

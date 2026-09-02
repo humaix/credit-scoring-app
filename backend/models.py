@@ -71,7 +71,7 @@ class VerificationRecord(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     application_id: Mapped[int] = mapped_column(
-        ForeignKey("applications.id"), index=True)
+        ForeignKey("applications.id"), index=True, unique=True)
     provider: Mapped[str] = mapped_column(String(30), default="mock")
     # pending | verified | failed
     status: Mapped[str] = mapped_column(String(20), default="pending")
@@ -91,7 +91,7 @@ class ConsentRecord(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     application_id: Mapped[int] = mapped_column(
-        ForeignKey("applications.id"), index=True)
+        ForeignKey("applications.id"), index=True, unique=True)
     wallet_activity: Mapped[bool] = mapped_column(default=False)
     telecom_activity: Mapped[bool] = mapped_column(default=False)
     digital_transactions: Mapped[bool] = mapped_column(default=False)
@@ -106,7 +106,7 @@ class QuestionnaireResult(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     application_id: Mapped[int] = mapped_column(
-        ForeignKey("applications.id"), index=True)
+        ForeignKey("applications.id"), index=True, unique=True)
     answers: Mapped[list] = mapped_column(JSON)  # 12 Likert values, 1-5
     psychometric_score: Mapped[float] = mapped_column(Float)
     consistency_warnings: Mapped[list] = mapped_column(JSON, default=list)
@@ -120,7 +120,7 @@ class AssessmentResult(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     application_id: Mapped[int] = mapped_column(
-        ForeignKey("applications.id"), index=True)
+        ForeignKey("applications.id"), index=True, unique=True)
     repayment_score: Mapped[float] = mapped_column(Float)
     raw_score: Mapped[float] = mapped_column(Float)
     score_category: Mapped[str] = mapped_column(String(20))

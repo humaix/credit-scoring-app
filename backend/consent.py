@@ -8,6 +8,7 @@ mock provider fetches (phase 4) are gated on it.
 from sqlalchemy.orm import Session
 
 from .errors import ApiError
+from .flow import STEP_ORDER
 from .models import Application, ConsentRecord
 
 CONSENT_CATEGORIES = (
@@ -32,8 +33,6 @@ CONSENT_NOTICE = (
     "this application."
 )
 
-_STEP_ORDER = "created -> verified -> consented -> assessed -> scored"
-
 
 def grant_consent(db: Session, application: Application, choices: dict) -> dict:
     """Record consent for the four categories and advance the application."""
@@ -49,7 +48,7 @@ def grant_consent(db: Session, application: Application, choices: dict) -> dict:
     if application.status != "verified":
         raise ApiError(
             409, "invalid_state",
-            f"Application is '{application.status}'; expected step order: {_STEP_ORDER}")
+            f"Application is '{application.status}'; expected step order: {STEP_ORDER}")
 
     declined = [c for c in CONSENT_CATEGORIES if not choices.get(c)]
     if declined:

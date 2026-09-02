@@ -14,14 +14,13 @@ from sqlalchemy.orm import Session
 
 from . import config
 from .errors import ApiError
+from .flow import STEP_ORDER
 from .models import Application, VerificationRecord
 
 OTP_NOTICE = (
     "Simulated OTP - no real SMS is sent. This prototype has no NADRA, "
     "Easypaisa, JazzCash or telecom integration."
 )
-
-_STEP_ORDER = "created -> verified -> consented -> assessed -> scored"
 
 
 class VerificationProvider:
@@ -76,7 +75,7 @@ def request_otp(db: Session, application: Application) -> dict:
     if application.status != "created":
         raise ApiError(
             409, "invalid_state",
-            f"Application is '{application.status}'; expected step order: {_STEP_ORDER}")
+            f"Application is '{application.status}'; expected step order: {STEP_ORDER}")
 
     record = _record(db, application)
     if record.status == "verified":
@@ -106,7 +105,7 @@ def verify_otp(db: Session, application: Application, code: str) -> dict:
     if application.status != "created":
         raise ApiError(
             409, "invalid_state",
-            f"Application is '{application.status}'; expected step order: {_STEP_ORDER}")
+            f"Application is '{application.status}'; expected step order: {STEP_ORDER}")
 
     record = (
         db.query(VerificationRecord)

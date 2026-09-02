@@ -1,0 +1,13 @@
+# Backend API service dependencies (backend/, Python 3.10) — pinned to the
+# versions the product was built and tested with.
+# The ML / explainability layer has its own pins in requirements-explainability.txt
+# (xgboost<3 matters there for shap's TreeExplainer).
+fastapi==0.141.1
+uvicorn==0.47.0
+SQLAlchemy==2.0.52
+pydantic==2.13.5
+
+# test toolchain (TestClient is httpx-based; pypdf verifies report contents)
+pytest==9.1.1
+httpx==0.28.1
+pypdf==6.16.2

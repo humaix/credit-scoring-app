@@ -3,6 +3,7 @@
 import io
 import textwrap
 from datetime import datetime
+from xml.sax.saxutils import escape
 
 import matplotlib
 matplotlib.use("Agg")
@@ -191,22 +192,26 @@ def _factors_section(assessment, explanation):
 
     story.append(Paragraph("Positive Factors", _H3))
     if positives:
-        story.extend(Paragraph(f, _BULLET, bulletText="\u2022") for f in positives)
+        # LLM wording is free text: escape it so ReportLab's markup parser
+        # can never choke on tag-like sequences (e.g. "income <br> stable")
+        story.extend(
+            Paragraph(escape(f), _BULLET, bulletText="\u2022") for f in positives)
     else:
         story.append(Paragraph("No features meaningfully increased the score for "
                                "this application.", _BODY))
 
     story.append(Paragraph("Factors Reducing the Score", _H3))
     if negatives:
-        story.extend(Paragraph(f, _BULLET, bulletText="\u2022") for f in negatives)
+        story.extend(
+            Paragraph(escape(f), _BULLET, bulletText="\u2022") for f in negatives)
     else:
         story.append(Paragraph("No features meaningfully reduced the score for "
                                "this application.", _BODY))
 
     story.append(Paragraph("Overall Explanation", _H3))
-    story.append(Paragraph(explanation["overall_explanation"], _BODY))
+    story.append(Paragraph(escape(explanation["overall_explanation"]), _BODY))
     story.append(Spacer(1, 6))
-    story.append(Paragraph(explanation["summary"], _BODY))
+    story.append(Paragraph(escape(explanation["summary"]), _BODY))
     return story
 
 

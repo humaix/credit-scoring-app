@@ -15,6 +15,7 @@ scale (observed range 3.1-97.0).
 from sqlalchemy.orm import Session
 
 from .errors import ApiError
+from .flow import STEP_ORDER
 from .models import Application, QuestionnaireResult
 
 LIKERT_LABELS = [
@@ -73,8 +74,6 @@ ASSESSMENT_NOTE = (
     "and never change the score."
 )
 
-_STEP_ORDER = "created -> verified -> consented -> assessed -> scored"
-
 
 def score_questionnaire(answers: list) -> tuple:
     """Return (psychometric_score 0-100, consistency warnings)."""
@@ -123,7 +122,7 @@ def save_questionnaire(db: Session, application: Application, answers: list) -> 
     if application.status != "consented":
         raise ApiError(
             409, "invalid_state",
-            f"Application is '{application.status}'; expected step order: {_STEP_ORDER}")
+            f"Application is '{application.status}'; expected step order: {STEP_ORDER}")
 
     psychometric, warnings = score_questionnaire(answers)
     record = QuestionnaireResult(

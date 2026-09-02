@@ -1,6 +1,7 @@
 """Registration and login endpoints (prototype session auth)."""
 
 from fastapi import APIRouter, Depends
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..auth import applicant_public, new_session_token
@@ -27,7 +28,14 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         session_token=new_session_token(),
     )
     db.add(applicant)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # a concurrent registration with the same CNIC lost the race
+        db.rollback()
+        raise ApiError(
+            409, "already_registered",
+            "An applicant with this CNIC is already registered - log in instead")
     db.refresh(applicant)
     return RegisterResponse(
         session_token=applicant.session_token,

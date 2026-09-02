@@ -16,18 +16,19 @@ from sqlalchemy.orm import Session
 from explanation_utils import (
     FEATURE_LABELS, MODEL_FEATURES, format_feature_value, validate_applicant_data,
 )
-from llm_explainer import generate_natural_language_explanation
+from llm_explainer import (
+    fallback_explanation, generate_natural_language_explanation,
+)
 from report_generator import render_report
 from shap_explainer import assess_applicant
 
 from . import config
 from .errors import ApiError
 from .feature_builder import PROVIDER_SIMULATION_NOTE, build_features
+from .flow import STEP_ORDER
 from .models import Application, AssessmentResult, ReportFile
 
 REPORTS_DIR = Path(config.PROJECT_ROOT) / "generated_reports"
-
-_STEP_ORDER = "created -> verified -> consented -> assessed -> scored"
 
 SCORE_DISCLAIMER = (
     "This score is a model-estimated repayment assessment and is not a "
@@ -103,7 +104,7 @@ def run_scoring(db: Session, application: Application) -> dict:
     if application.status != "assessed":
         raise ApiError(
             409, "invalid_state",
-            f"Application is '{application.status}'; expected step order: {_STEP_ORDER}")
+            f"Application is '{application.status}'; expected step order: {STEP_ORDER}")
 
     features, warnings = build_features(application)
 
@@ -117,7 +118,13 @@ def run_scoring(db: Session, application: Application) -> dict:
     explanation = generate_natural_language_explanation(assessment)
 
     pdf_path = _pdf_path_for(application.id)
-    render_report(assessment, explanation, pdf_path)
+    try:
+        render_report(assessment, explanation, pdf_path)
+    except Exception:
+        # a PDF render failure must never block scoring: re-word with the
+        # deterministic fallback templates and render those instead
+        explanation = fallback_explanation(assessment)
+        render_report(assessment, explanation, pdf_path)
 
     row = AssessmentResult(
         application_id=application.id,

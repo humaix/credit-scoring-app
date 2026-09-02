@@ -2,7 +2,7 @@
 
 // Shared UI primitives — one place for the product's look and feel.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   ApiError, api, currentAppId, nextStepFor, sessionToken,
@@ -228,15 +228,17 @@ export function Stepper({ current }: { current: number }) {
 /** Redirects to /login unless a session token exists. */
 export function useRequireSession(): boolean {
   const router = useRouter();
-  const [ready, setReady] = useState(false);
+  // the token lives in localStorage (external store); read it the React way
+  // instead of copying it into state inside an effect
+  const token = useSyncExternalStore(
+    () => () => {}, // the token never changes while a page is mounted
+    sessionToken,
+    () => null, // server render: no localStorage
+  );
   useEffect(() => {
-    if (!sessionToken()) {
-      router.replace("/login");
-      return;
-    }
-    setReady(true);
-  }, [router]);
-  return ready;
+    if (token === null) router.replace("/login");
+  }, [token, router]);
+  return token !== null;
 }
 
 /**

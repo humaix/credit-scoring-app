@@ -126,6 +126,13 @@ export default function DashboardPage() {
           ))}
         </ul>
       )}
+
+      {applications.length > 0 && (
+        <p className="text-xs text-slate-500">
+          Scores are model-estimated repayment assessments — not a guaranteed
+          probability of repayment or a loan decision.
+        </p>
+      )}
     </div>
   );
 }

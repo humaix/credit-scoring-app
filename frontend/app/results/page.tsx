@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { api, downloadReport, formatPKR } from "@/lib/api";
+import { downloadReport, formatPKR } from "@/lib/api";
 import ContributionChart from "@/components/ContributionChart";
 import ScoreGauge from "@/components/ScoreGauge";
 import {
