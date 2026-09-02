@@ -99,6 +99,39 @@ class ApplicationCreate(BaseModel):
         return self
 
 
+# -------------------------------------------- verification / consent / assessment
+
+class ApplicationRef(BaseModel):
+    """Every step endpoint references the application it belongs to."""
+    application_id: int
+
+
+class OtpVerifyRequest(ApplicationRef):
+    code: str = Field(min_length=4, max_length=8)
+
+
+class ConsentGrantRequest(ApplicationRef):
+    # a missing category counts as declined; the service names the
+    # declined categories in the error message
+    wallet_activity: bool = False
+    telecom_activity: bool = False
+    digital_transactions: bool = False
+    previous_loan_info: bool = False
+
+
+class QuestionnaireSubmit(ApplicationRef):
+    answers: list[int] = Field(min_length=12, max_length=12)
+
+    @field_validator("answers")
+    @classmethod
+    def _likert_range(cls, values: list[int]) -> list[int]:
+        for index, value in enumerate(values):
+            if not 1 <= value <= 5:
+                raise ValueError(
+                    f"answers[{index}] must be between 1 and 5 (Likert scale)")
+        return values
+
+
 # --------------------------------------------------------------- responses
 
 class ApplicantPublic(BaseModel):
@@ -173,3 +206,33 @@ class LoginResponse(BaseModel):
     session_token: str
     applicant: ApplicantPublic
     applications: list[ApplicationSummary]
+
+
+class OtpRequestResponse(BaseModel):
+    status: str
+    expires_in_seconds: int
+    notice: str
+    # present only when DEV_RETURN_OTP is enabled (demo mode)
+    simulated_otp: str | None = None
+
+
+class OtpVerifyResponse(BaseModel):
+    status: str
+    message: str | None = None
+    attempts_remaining: int | None = None
+    verified_at: datetime | None = None
+    notice: str | None = None
+
+
+class ConsentGrantResponse(BaseModel):
+    status: str
+    categories: list[str]
+    granted_at: datetime
+    notice: str
+
+
+class QuestionnaireSubmitResponse(BaseModel):
+    psychometric_score: float
+    consistency_warnings: list[str]
+    completed_at: datetime
+    note: str

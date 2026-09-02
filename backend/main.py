@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from . import config
 from .db import init_db
 from .errors import ApiError
-from .routers import applications, auth
+from .routers import applications, assessment, auth, consent, meta, verification
 
 
 @asynccontextmanager
@@ -75,6 +75,10 @@ def create_app() -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(applications.router)
+    app.include_router(verification.router)
+    app.include_router(consent.router)
+    app.include_router(assessment.router)
+    app.include_router(meta.router)
     return app
 
 
