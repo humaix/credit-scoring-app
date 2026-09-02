@@ -1,0 +1,39 @@
+# Render Blueprint — deploys the FastAPI backend together with the
+# ML / explainability engine (the model pickle in models/ ships with the repo).
+# Apply via Render Dashboard -> New -> Blueprint, or follow the manual steps
+# in DEPLOYMENT.md.
+#
+# Secret values (Render prompts for these once; they are never committed):
+#   CORS_ORIGINS            your Vercel frontend URL, e.g. https://your-app.vercel.app
+#   LLM_API_KEY / LLM_BASE_URL / LLM_MODEL
+#                           optional — leave LLM_MODEL empty to disable the LLM
+#                           wording layer (deterministic SHAP templates are used)
+services:
+  - type: web
+    name: credit-scoring-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-api.txt -r requirements-explainability.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      # must be 3.10.x — the model pickle was built and tested with 3.10.11;
+      # if Render rejects this exact patch version use the closest 3.10.x
+      - key: PYTHON_VERSION
+        value: 3.10.11
+      # demo mode: the simulated OTP is returned in API responses (always
+      # clearly labelled) so the flow can be demonstrated without an SMS gateway
+      - key: DEV_RETURN_OTP
+        value: "true"
+      - key: CORS_ORIGINS
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        sync: false
+      - key: LLM_MODEL
+        sync: false
+      # DATABASE_URL is intentionally not set: the default SQLite file lives on
+      # the (ephemeral) instance disk, which is fine for demo data. For a
+      # persistent database add Render PostgreSQL and set
+      # DATABASE_URL=postgresql+psycopg2://... — see DEPLOYMENT.md.

@@ -1,13 +1,20 @@
 # Explainability layer dependencies (Python 3.10)
-# NOTE: xgboost is pinned to 2.1.x because shap 0.49's TreeExplainer cannot
-# parse the base_score format written by XGBoost 3.x.
-numpy
-pandas
-joblib
-shap>=0.45,<0.50
-xgboost>=2.1,<3.0
-matplotlib
-reportlab
-requests
-python-dotenv
-pypdf
+# Exact pins: the saved pipeline (models/final_credit_scoring_model.pkl)
+# contains scikit-learn + XGBoost objects, so the whole scientific stack is
+# pinned to the versions it was built and tested with — a fresh install
+# (local or a Render deploy) reproduces the verified environment.
+# NOTE: xgboost stays < 3.0 because shap 0.49's TreeExplainer cannot parse
+# the base_score format written by XGBoost 3.x.
+numpy==2.2.6
+pandas==2.3.3
+scipy==1.15.3
+scikit-learn==1.7.2
+joblib==1.5.3
+xgboost==2.1.4
+shap==0.49.1
+numba==0.67.0
+matplotlib==3.10.8
+reportlab==5.0.1
+requests==2.34.2
+python-dotenv==1.2.3
+pypdf==6.16.2

@@ -7,6 +7,10 @@ uvicorn==0.47.0
 SQLAlchemy==2.0.52
 pydantic==2.13.5
 
+# only needed when DATABASE_URL points at PostgreSQL (Render Postgres /
+# Supabase); the SQLite default needs no extra driver
+psycopg2-binary>=2.9,<3.0
+
 # test toolchain (TestClient is httpx-based; pypdf verifies report contents)
 pytest==9.1.1
 httpx==0.28.1
