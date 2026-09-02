@@ -3,9 +3,27 @@
 Assembles the exact ten model features an application needs, with a documented
 source for each (see feature_sources.py). The telecom and wallet summaries are
 SIMULATED provider outputs — no real operator or wallet provider is contacted.
-They are deterministic functions of the applicant's declared digital activity,
-so identical declared input always produces an identical score (no hidden
-randomness anywhere in the demo).
+
+Each simulated summary implements the product's documented weighted composite
+(see the "features calculation" design notes):
+
+  Telecom Score (0-100) = 0.30*F1 + 0.20*F2 + 0.25*F3 + 0.25*F4
+    F1 recharge consistency  = min(purchases/10, 1) * 100
+    F2 account type         = prepaid 60, adjusted toward 100 by consistency
+    F3 SIM tenure           = min((age-18)*4 / 36, 1) * 100
+    F4 avg recharge amount  = min(income*0.02 / 2500, 1) * 100
+
+  Wallet Score (0-100) = 0.30*F1 + 0.25*F2 + 0.25*F3 + 0.20*F4
+    F1 transaction frequency = min(purchases/12, 1) * 100
+    F2 average balance       = min(income*0.40 / 60000, 1) * 100
+    F3 inflow/outflow ratio  = min(2*(1 - debt_to_income) * 50, 100)
+    F4 wallet account age    = min(purchases*4 / 24, 1) * 100
+
+The composite is divided by 100 to reach the model's 0-1 feature scale and
+clamped to the range the model saw in training. Every component is a
+deterministic function of the applicant's declared profile, so identical
+declared input always produces an identical score (no hidden randomness
+anywhere in the demo).
 
 Cross-field consistency checks (validation Layer 4) return warnings only:
 they flag clearly inconsistent combinations for manual review and never
@@ -17,35 +35,40 @@ from .models import Application
 # training-distribution anchors for the simulated provider summaries
 _TELECOM_MIN, _TELECOM_MAX = 0.20, 0.98
 _WALLET_MIN, _WALLET_MAX = 0.10, 0.95
-_DIGITAL_SATURATION = 45  # purchases/month at which digital intensity saturates
 
 PROVIDER_SIMULATION_NOTE = (
     "Telecom and wallet summaries are simulated for this prototype (no real "
-    "provider is contacted) and are derived deterministically from the "
-    "applicant's declared digital activity."
+    "provider is contacted). Each is the documented weighted composite — "
+    "telecom: 30% recharge consistency, 20% account type, 25% SIM tenure, "
+    "25% average recharge amount; wallet: 30% transaction frequency, 25% "
+    "average balance, 25% inflow/outflow ratio, 20% account age — computed "
+    "deterministically from the applicant's declared profile."
 )
 
 
-def _digital_intensity(purchases: float) -> float:
-    """Saturating 0-1 measure of declared digital activity.
-
-    1 - exp(-purchases/6) mirrors the concave digital-activity relationship
-    observed during EDA: activity helps, with diminishing returns.
-    """
-    purchases = max(float(purchases), 0.0)
-    return 1.0 - pow(2.718281828459045, -purchases / 6.0)
-
-
-def simulated_telecom_usage(purchases: float) -> float:
+def simulated_telecom_usage(purchases: float, monthly_income: float,
+                            age: int) -> float:
     """Mock telecom provider summary, within the training range 0.20-0.98."""
-    intensity = _digital_intensity(purchases)
-    return round(_TELECOM_MIN + (_TELECOM_MAX - _TELECOM_MIN) * intensity, 2)
+    consistency = min(max(purchases, 0.0) / 10.0, 1.0) * 100.0
+    account_type = 60.0 + 0.4 * consistency  # prepaid, adjusted by consistency
+    tenure = min(max(age - 18, 0) * 4.0 / 36.0, 1.0) * 100.0
+    recharge = min(max(monthly_income, 0.0) * 0.02 / 2500.0, 1.0) * 100.0
+    composite = (0.30 * consistency + 0.20 * account_type
+                 + 0.25 * tenure + 0.25 * recharge)
+    return round(min(max(composite / 100.0, _TELECOM_MIN), _TELECOM_MAX), 2)
 
 
-def simulated_wallet_activity(purchases: float) -> float:
+def simulated_wallet_activity(purchases: float, monthly_income: float,
+                              debt_to_income: float) -> float:
     """Mock wallet provider summary, within the training range 0.10-0.95."""
-    intensity = _digital_intensity(purchases)
-    return round(_WALLET_MIN + (_WALLET_MAX - _WALLET_MIN) * intensity, 2)
+    frequency = min(max(purchases, 0.0) / 12.0, 1.0) * 100.0
+    balance = min(max(monthly_income, 0.0) * 0.40 / 60000.0, 1.0) * 100.0
+    inflow_outflow = min(
+        2.0 * (1.0 - min(max(debt_to_income, 0.0), 1.0)) * 50.0, 100.0)
+    account_age = min(max(purchases, 0.0) * 4.0 / 24.0, 1.0) * 100.0
+    composite = (0.30 * frequency + 0.25 * balance
+                 + 0.25 * inflow_outflow + 0.20 * account_age)
+    return round(min(max(composite / 100.0, _WALLET_MIN), _WALLET_MAX), 2)
 
 
 def cross_field_warnings(application: Application) -> list:
@@ -68,18 +91,25 @@ def build_features(application: Application) -> tuple:
 
     Returns (features dict, cross-field consistency warnings).
     """
+    debt_to_income = round(
+        application.monthly_debt_payments / application.monthly_income, 4)
     features = {
         "age": application.age,
         "occupation": application.occupation,
         "monthly_income": application.monthly_income,
         "existing_loan_history": application.existing_loan_history,
-        "debt_to_income_ratio": round(
-            application.monthly_debt_payments / application.monthly_income, 4),
+        "debt_to_income_ratio": debt_to_income,
         "loan_size": application.requested_loan_size,
         "telecom_usage_score": simulated_telecom_usage(
-            application.digital_purchase_frequency),
+            application.digital_purchase_frequency,
+            application.monthly_income,
+            application.age,
+        ),
         "mobile_wallet_activity": simulated_wallet_activity(
-            application.digital_purchase_frequency),
+            application.digital_purchase_frequency,
+            application.monthly_income,
+            debt_to_income,
+        ),
         "digital_purchase_frequency": application.digital_purchase_frequency,
         "psychometric_score": application.questionnaire.psychometric_score,
     }

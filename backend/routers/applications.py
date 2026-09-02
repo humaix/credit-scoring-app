@@ -67,10 +67,17 @@ def _detail(application: Application) -> dict:
             "completed_at": application.questionnaire.completed_at,
         }
     if application.assessment is not None:
+        # full persisted assessment — powers the results dashboard with the
+        # exact values the scoring run produced (and the PDF shows)
         data["assessment"] = {
             "repayment_score": application.assessment.repayment_score,
             "raw_score": application.assessment.raw_score,
             "score_category": application.assessment.score_category,
+            "base_value": application.assessment.base_value,
+            "positive_contributors": application.assessment.positive_contributors,
+            "negative_contributors": application.assessment.negative_contributors,
+            "all_contributions": application.assessment.all_contributions,
+            "explanation": application.assessment.explanation,
             "explanation_source": application.assessment.explanation_source,
             "created_at": application.assessment.created_at,
         }

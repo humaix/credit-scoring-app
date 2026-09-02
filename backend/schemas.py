@@ -166,10 +166,31 @@ class QuestionnairePublic(BaseModel):
     completed_at: datetime
 
 
+class Contributor(BaseModel):
+    feature: str
+    value: str
+    shap_value: float
+
+
+class ExplanationPublic(BaseModel):
+    summary: str
+    positive_factors: list[str]
+    negative_factors: list[str]
+    overall_explanation: str
+    source: str
+
+
 class AssessmentPublic(BaseModel):
+    # everything the results dashboard needs, exactly as persisted at scoring
+    # time — the dashboard and the PDF always show identical values
     repayment_score: float
     raw_score: float
     score_category: str
+    base_value: float
+    positive_contributors: list[Contributor]
+    negative_contributors: list[Contributor]
+    all_contributions: list[Contributor]
+    explanation: ExplanationPublic
     explanation_source: str
     created_at: datetime
 
@@ -236,20 +257,6 @@ class QuestionnaireSubmitResponse(BaseModel):
     consistency_warnings: list[str]
     completed_at: datetime
     note: str
-
-
-class Contributor(BaseModel):
-    feature: str
-    value: str
-    shap_value: float
-
-
-class ExplanationPublic(BaseModel):
-    summary: str
-    positive_factors: list[str]
-    negative_factors: list[str]
-    overall_explanation: str
-    source: str
 
 
 class ScoringResponse(BaseModel):

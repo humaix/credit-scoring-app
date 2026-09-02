@@ -141,12 +141,21 @@ def test_strong_moderate_weak_profiles_score_correctly(client, offline_explanati
         assert "not a guaranteed probability" in result["disclaimer"]
         assert "simulated" in result["provider_note"].lower()
 
-        # application detail reflects the scored state
+        # application detail reflects the scored state and carries the full
+        # persisted assessment (identical to what the scoring run returned)
         detail = client.get(f"/api/applications/{application_id}",
                             headers=headers).json()
         assert detail["status"] == "scored"
         assert detail["assessment"]["repayment_score"] == score
         assert detail["assessment"]["score_category"] == result["score_category"]
+        assert detail["assessment"]["base_value"] == result["base_value"]
+        assert (detail["assessment"]["all_contributions"]
+                == result["all_contributions"])
+        assert (detail["assessment"]["positive_contributors"]
+                == result["positive_contributors"])
+        assert (detail["assessment"]["negative_contributors"]
+                == result["negative_contributors"])
+        assert detail["assessment"]["explanation"] == result["explanation"]
 
     # the model ranks the three profiles in the expected order
     assert scores["strong"]["repayment_score"] > scores["moderate"]["repayment_score"]

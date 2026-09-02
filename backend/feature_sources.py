@@ -38,15 +38,21 @@ FEATURE_SOURCES = {
         "label": "Telecom Usage Score",
         "source": "mock_telecom_integration",
         "description": "Simulated telecom provider summary (clearly labelled "
-                       "mock; no real operator is contacted). Requires "
-                       "telecom activity consent.",
+                       "mock; no real operator is contacted): weighted "
+                       "composite of recharge consistency (30%), account "
+                       "type (20%), SIM tenure (25%) and average recharge "
+                       "amount (25%), scaled to 0-1. Requires telecom "
+                       "activity consent.",
     },
     "mobile_wallet_activity": {
         "label": "Mobile Wallet Activity",
         "source": "mock_wallet_integration",
         "description": "Simulated wallet provider summary (clearly labelled "
-                       "mock; no real wallet provider is contacted). "
-                       "Requires wallet activity consent.",
+                       "mock; no real wallet provider is contacted): "
+                       "weighted composite of transaction frequency (30%), "
+                       "average balance (25%), inflow/outflow ratio (25%) "
+                       "and account age (20%), scaled to 0-1. Requires "
+                       "wallet activity consent.",
     },
     "digital_purchase_frequency": {
         "label": "Digital Purchase Frequency",
