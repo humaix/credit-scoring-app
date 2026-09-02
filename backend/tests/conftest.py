@@ -36,6 +36,17 @@ def client():
 
 
 @pytest.fixture()
+def offline_explanations(monkeypatch):
+    """Deterministic fallback wording for every scoring test — never the live LLM."""
+    import backend.scoring as scoring_module
+    from llm_explainer import fallback_explanation
+
+    monkeypatch.setattr(
+        scoring_module, "generate_natural_language_explanation",
+        fallback_explanation)
+
+
+@pytest.fixture()
 def session_headers(client):
     """A registered applicant's auth headers (unique CNIC per test)."""
     suffix = f"{secrets.randbelow(10_000_000):07d}"  # digits only

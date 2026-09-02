@@ -109,19 +109,21 @@ def questions_public() -> dict:
 
 def save_questionnaire(db: Session, application: Application, answers: list) -> dict:
     """Score, persist and advance the application to 'assessed'."""
-    if application.status != "consented":
-        raise ApiError(
-            409, "invalid_state",
-            f"Application is '{application.status}'; expected step order: {_STEP_ORDER}")
-
     existing = (
         db.query(QuestionnaireResult)
         .filter(QuestionnaireResult.application_id == application.id)
         .first()
     )
     if existing is not None:
+        # duplicate check first (same ordering as grant_consent) so a
+        # resubmission after completion reports what actually happened
         raise ApiError(409, "assessment_already_completed",
                        "The financial behaviour assessment is already completed")
+
+    if application.status != "consented":
+        raise ApiError(
+            409, "invalid_state",
+            f"Application is '{application.status}'; expected step order: {_STEP_ORDER}")
 
     psychometric, warnings = score_questionnaire(answers)
     record = QuestionnaireResult(

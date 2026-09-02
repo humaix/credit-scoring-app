@@ -40,7 +40,9 @@ from shap_explainer import assess_applicant  # noqa: E402
 FORBIDDEN_IN_PDF = [
     "occupation_", "existing_loan_history_", "loan_history_code",
     "borrower_id", "gender", "province", "SHAP", "shap", "__",
-    "guaranteed probability", "will cause",
+    # overclaiming guard: the required disclaimer negates the phrase
+    # ("is NOT a guaranteed probability"), so only a positive claim matches
+    "is a guaranteed probability", "will cause",
 ]
 _LABEL_TO_RAW = {display: raw for raw, display in FEATURE_LABELS.items()}
 

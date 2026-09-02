@@ -39,9 +39,11 @@ FEATURE_LABELS = {
     "psychometric_score": "Psychometric Score",
 }
 
+# contiguous bands so no fractional score (e.g. 60.4) can fall between
+# them and crash the flow; integer boundaries land in the lower band
 CATEGORY_BOUNDS = [
-    ("Very Low", 0, 20), ("Low", 21, 40), ("Moderate", 41, 60),
-    ("High", 61, 80), ("Very High", 81, 100),
+    ("Very Low", 0.0, 20.0), ("Low", 20.0, 40.0), ("Moderate", 40.0, 60.0),
+    ("High", 60.0, 80.0), ("Very High", 80.0, 100.0),
 ]
 
 # numeric validation ranges: (min, max, integral)
