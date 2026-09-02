@@ -14,7 +14,7 @@ __pycache__/
 
 # generated outputs (regenerable at runtime)
 explainability/generated_reports/
-backend/reports/
+generated_reports/
 
 # node / next.js
 node_modules/

@@ -1,11 +1,14 @@
-"""Loan application endpoints — create, list, detail."""
+"""Loan application endpoints — create, list, detail, PDF report."""
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from ..auth import applicant_public, get_current_applicant, get_owned_application
 from ..db import get_db
+from ..errors import ApiError
 from ..models import Applicant, Application
+from ..scoring import latest_report_path
 from ..schemas import (
     ApplicationCreated, ApplicationCreate, ApplicationDetail, ApplicationSummary,
 )
@@ -120,3 +123,19 @@ def get_application(
 ):
     application = get_owned_application(application_id, applicant, db)
     return _detail(application)
+
+
+@router.get("/{application_id}/report")
+def get_application_report(
+    application_id: int,
+    applicant: Applicant = Depends(get_current_applicant),
+    db: Session = Depends(get_db),
+):
+    application = get_owned_application(application_id, applicant, db)
+    if application.assessment is None:
+        raise ApiError(
+            409, "not_scored",
+            "Score the application before requesting the assessment report")
+    path = latest_report_path(db, application)
+    return FileResponse(
+        path, media_type="application/pdf", filename=path.name)

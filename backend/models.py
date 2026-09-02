@@ -128,6 +128,8 @@ class AssessmentResult(Base):
     positive_contributors: Mapped[list] = mapped_column(JSON)
     negative_contributors: Mapped[list] = mapped_column(JSON)
     all_contributions: Mapped[list] = mapped_column(JSON)
+    # the ten validated model inputs, kept so the PDF can be re-rendered
+    applicant_features: Mapped[dict] = mapped_column(JSON)
     explanation: Mapped[dict] = mapped_column(JSON)
     explanation_source: Mapped[str] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
