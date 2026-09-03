@@ -13,7 +13,7 @@ from backend.db import SessionLocal
 from backend.models import Application
 from backend.tests.flow import (
     MODERATE, WEAK, WITH_BANK, full_flow, likert_answers, score,
-    unique_identity,
+    submit_employment, unique_identity,
 )
 
 
@@ -156,6 +156,7 @@ def test_yes_consent_requires_bank_category(client):
     headers = _register(client)
     application_id = _create(client, headers, WITH_BANK)
     _verify_otp(client, headers, application_id)
+    submit_employment(client, headers, application_id, WITH_BANK)
 
     response = client.post("/api/consent", json={
         "application_id": application_id,
@@ -188,6 +189,7 @@ def test_no_consent_never_requires_bank_category(client):
     headers = _register(client)
     application_id = _create(client, headers, MODERATE)
     _verify_otp(client, headers, application_id)
+    submit_employment(client, headers, application_id, MODERATE)
 
     # the bank category is not applicable: granting the four alternative-data
     # categories succeeds even though bank_account_data was never sent
@@ -220,6 +222,7 @@ def test_bank_account_full_flow_scores(client, offline_explanations):
     headers = _register(client)
     application_id = _create(client, headers, WITH_BANK)
     _verify_otp(client, headers, application_id)
+    submit_employment(client, headers, application_id, WITH_BANK)
 
     response = client.post("/api/consent", json={
         "application_id": application_id,

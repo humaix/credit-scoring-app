@@ -4,7 +4,7 @@ import itertools
 
 from backend import config
 from backend.questionnaire import CONSISTENCY_PAIRS, QUESTIONS, score_questionnaire
-from backend.tests.flow import cnic_image_b64
+from backend.tests.flow import cnic_image_b64, submit_employment
 
 VALID_APPLICATION = {
     "age": 35,
@@ -77,6 +77,7 @@ def _complete_through_consent(client):
     otp = _request_otp(client, headers, application_id)
     assert _verify_otp(client, headers, application_id,
                       otp["simulated_otp"]).json()["status"] == "verified"
+    submit_employment(client, headers, application_id, VALID_APPLICATION)
     _grant_full_consent(client, headers, application_id)
     return headers, application_id
 
@@ -219,6 +220,7 @@ def test_consent_declined_categories_rejected_then_granted(client):
     otp = _request_otp(client, headers, application_id)
     assert _verify_otp(client, headers, application_id,
                       otp["simulated_otp"]).json()["status"] == "verified"
+    submit_employment(client, headers, application_id, VALID_APPLICATION)
 
     # declining any category blocks scoring with a clear message
     response = client.post("/api/consent", json={

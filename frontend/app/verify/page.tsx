@@ -61,7 +61,9 @@ export default function VerifyPage() {
         { application_id: app!.id, code: code.trim() },
       );
       if (result.status === "verified") {
-        router.push("/consent");
+        // Phase 3: the employment/document step runs between identity
+        // verification and consent
+        router.push("/employment");
         return;
       }
       if (result.status === "pending") {

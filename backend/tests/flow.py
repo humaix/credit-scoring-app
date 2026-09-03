@@ -58,6 +58,12 @@ def cnic_image_b64(width=640, height=480, brightness=120) -> str:
     return base64.b64encode(buffer.getvalue()).decode()
 
 
+def document_image_b64(width=640, height=480, brightness=150) -> str:
+    """A base64 JPEG distinct from the CNIC images (different tone), so an
+    employment document passes the duplicate screen by default."""
+    return cnic_image_b64(width=width, height=height, brightness=brightness)
+
+
 def unique_identity(cnic_prefix="35202") -> dict:
     """A complete, distinct registration payload per call (tests share one DB)."""
     n = next(_identity_counter)
@@ -83,7 +89,7 @@ def likert_answers(orientation):
 
 
 def full_flow(client, payload, answers):
-    """register -> application -> OTP verify -> consent -> questionnaire."""
+    """register -> application -> OTP verify -> employment -> consent -> questionnaire."""
     response = client.post("/api/auth/register", json=unique_identity())
     assert response.status_code == 200, response.text
     headers = {"X-Session-Token": response.json()["session_token"]}
@@ -101,6 +107,8 @@ def full_flow(client, payload, answers):
                            headers=headers)
     assert response.json()["status"] == "verified"
 
+    submit_employment(client, headers, application_id, payload)
+
     response = client.post("/api/consent", json={
         "application_id": application_id,
         "wallet_activity": True, "telecom_activity": True,
@@ -114,6 +122,36 @@ def full_flow(client, payload, answers):
                            headers=headers)
     assert response.status_code == 200, response.text
     return headers, application_id
+
+
+def employment_submission_for(payload) -> dict:
+    """The Phase 3 employment submission matching an application payload."""
+    occupation = payload.get("occupation", "Other")
+    submission = {}
+    if occupation == "Salaried":
+        submission["employer_name"] = "Systems Ltd"
+    if occupation in ("Business Owner", "Self-Employed"):
+        submission["business_name"] = "Raza Traders"
+    # salaried and business applicants declare their salary/income; every
+    # other occupation accepts no employment fields at all
+    if occupation == "Salaried" or occupation in ("Business Owner",
+                                                  "Self-Employed"):
+        submission["declared_income"] = payload["monthly_income"]
+        # salaried applicants capture a salary slip; business applicants
+        # only when they declared a bank account (statement is conditional)
+        if occupation == "Salaried" or payload.get("has_bank_account"):
+            submission["document_image"] = document_image_b64()
+    return submission
+
+
+def submit_employment(client, headers, application_id, payload) -> dict:
+    """Submit the Phase 3 employment step for an application payload."""
+    response = client.post("/api/employment", json={
+        "application_id": application_id,
+        **employment_submission_for(payload),
+    }, headers=headers)
+    assert response.status_code == 200, response.text
+    return response.json()
 
 
 def score(client, headers, application_id):

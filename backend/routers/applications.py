@@ -8,6 +8,9 @@ from ..auth import (
     applicant_public, get_current_applicant, get_owned_application, mask_iban,
 )
 from ..db import get_db
+from ..employment_docs import (
+    DOC_STATUS_LABELS, DOC_STATUS_NOTICE, no_document_notice,
+)
 from ..errors import ApiError
 from ..models import Applicant, Application
 from ..scoring import latest_report_path
@@ -50,6 +53,7 @@ def _detail(application: Application) -> dict:
         "wallet_provider": application.wallet_provider,
         "applicant": applicant_public(application.applicant),
         "verification": None,
+        "employment": None,
         "consent": None,
         "questionnaire": None,
         "assessment": None,
@@ -59,6 +63,26 @@ def _detail(application: Application) -> dict:
             "status": application.verification.status,
             "provider": application.verification.provider,
             "verified_at": application.verification.verified_at,
+        }
+    if application.employment is not None:
+        # Phase 3: prototype document verification — the stored filename
+        # never leaves the API, only the fact that a document was captured
+        record = application.employment
+        data["employment"] = {
+            "occupation": record.occupation,
+            "doc_type": record.doc_type,
+            "employer_name": record.employer_name,
+            "business_name": record.business_name,
+            "declared_income": record.declared_income,
+            "status": record.status,
+            "status_label": DOC_STATUS_LABELS.get(record.status, record.status),
+            "document_captured": record.filename is not None,
+            "checks": record.checks,
+            "notice": (
+                DOC_STATUS_NOTICE if record.filename is not None
+                else no_document_notice(
+                    record.occupation, application.has_bank_account)),
+            "created_at": record.created_at,
         }
     if application.consent is not None:
         data["consent"] = {

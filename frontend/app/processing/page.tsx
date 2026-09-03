@@ -59,7 +59,7 @@ export default function ProcessingPage() {
 
   return (
     <div className="mx-auto max-w-xl">
-      <Stepper current={4} />
+      <Stepper current={5} />
       <Card>
         <h1 className="text-xl font-bold tracking-tight text-slate-900">
           Ready to run your assessment

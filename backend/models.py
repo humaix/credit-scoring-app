@@ -104,6 +104,8 @@ class Application(Base):
     applicant: Mapped["Applicant"] = relationship(back_populates="applications")
     verification: Mapped["VerificationRecord"] = relationship(
         back_populates="application", uselist=False)
+    employment: Mapped["EmploymentVerification"] = relationship(
+        back_populates="application", uselist=False)
     consent: Mapped["ConsentRecord"] = relationship(
         back_populates="application", uselist=False)
     questionnaire: Mapped["QuestionnaireResult"] = relationship(
@@ -111,6 +113,45 @@ class Application(Base):
     assessment: Mapped["AssessmentResult"] = relationship(
         back_populates="application", uselist=False)
     reports: Mapped[list["ReportFile"]] = relationship(back_populates="application")
+
+
+class EmploymentVerification(Base):
+    """Prototype employment / financial document verification (Phase 3).
+
+    One record per application. Without OCR or provider integrations the
+    honest reachable statuses are needs_review (document captured and
+    quality-checked, pending provider verification) and not_required
+    (occupation without an applicable document). data_matched /
+    could_not_verify stay in the vocabulary for a future authorized
+    provider but are never produced in this prototype.
+    """
+
+    __tablename__ = "employment_verifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    application_id: Mapped[int] = mapped_column(
+        ForeignKey("applications.id"), index=True, unique=True)
+    # snapshot of the occupation the checks ran against
+    occupation: Mapped[str] = mapped_column(String(40))
+    # salary_slip | bank_statement | not_required
+    doc_type: Mapped[str] = mapped_column(String(20))
+    employer_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    business_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # income declared in the employment section — the monthly salary for
+    # salaried applicants, the re-confirmed monthly income for the business
+    # branch; compared against the application's monthly income as a
+    # prototype consistency check
+    declared_income: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # server-generated filename under uploads/employment/applicant_<id>/
+    filename: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    # needs_review | not_required
+    status: Mapped[str] = mapped_column(String(20))
+    # the prototype checks performed, exactly as returned to the applicant
+    checks: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow)
+
+    application: Mapped["Application"] = relationship(back_populates="employment")
 
 
 class VerificationRecord(Base):

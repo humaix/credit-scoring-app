@@ -33,37 +33,53 @@ CNIC_STATUS_NOTICE = (
 )
 
 
-def _fail(side: str, reason: str) -> None:
-    raise ApiError(422, "cnic_image", f"CNIC {side} image: {reason}")
+def _fail(label: str, code: str, reason: str) -> None:
+    raise ApiError(422, code, f"{label} image: {reason}")
 
 
-def parse_image(side: str, data: str) -> tuple:
-    """Validate one base64 image; return (raw bytes, file extension)."""
+def parse_image_data(label: str, code: str, data: str) -> tuple:
+    """Validate one base64 image; return (raw bytes, extension, info dict).
+
+    Shared by the CNIC capture (Phase 1) and the employment document
+    capture (Phase 3) so both run exactly the same quality checks.
+    """
     # accept both raw base64 and data URLs from the browser camera component
     if data.startswith("data:"):
         _, _, data = data.partition(",")
     try:
         raw = base64.b64decode(data, validate=True)
     except (binascii.Error, ValueError):
-        _fail(side, "could not be decoded — capture or upload the image again")
+        _fail(label, code, "could not be decoded — capture or upload the image again")
     if len(raw) > MAX_BYTES:
-        _fail(side, f"exceeds the {MAX_BYTES // (1024 * 1024)} MB limit")
+        _fail(label, code, f"exceeds the {MAX_BYTES // (1024 * 1024)} MB limit")
     try:
         image = Image.open(BytesIO(raw))
         image.load()
     except Exception:
-        _fail(side, "is not a valid image file")
+        _fail(label, code, "is not a valid image file")
     if image.format not in ALLOWED_FORMATS:
-        _fail(side, "must be a JPEG, PNG or WebP image")
+        _fail(label, code, "must be a JPEG, PNG or WebP image")
     if image.width < MIN_WIDTH or image.height < MIN_HEIGHT:
         _fail(
-            side,
+            label, code,
             f"is too small ({image.width}x{image.height}); "
             f"minimum {MIN_WIDTH}x{MIN_HEIGHT} pixels")
     brightness = ImageStat.Stat(image.convert("L")).mean[0]
     if brightness < MIN_BRIGHTNESS:
-        _fail(side, "appears too dark — retake it in better lighting")
-    return raw, image.format.lower().replace("jpeg", "jpg")
+        _fail(label, code, "appears too dark — retake it in better lighting")
+    info = {
+        "format": image.format,
+        "width": image.width,
+        "height": image.height,
+        "brightness": round(brightness, 1),
+    }
+    return raw, image.format.lower().replace("jpeg", "jpg"), info
+
+
+def parse_image(side: str, data: str) -> tuple:
+    """Validate one CNIC image; return (raw bytes, file extension)."""
+    raw, extension, _ = parse_image_data(f"CNIC {side}", "cnic_image", data)
+    return raw, extension
 
 
 def store_image(applicant_id: int, side: str, raw: bytes, extension: str) -> str:

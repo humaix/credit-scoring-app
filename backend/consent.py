@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from .errors import ApiError
 from .flow import STEP_ORDER
-from .models import Application, ConsentRecord
+from .models import Application, ConsentRecord, EmploymentVerification
 
 CONSENT_CATEGORIES = (
     "wallet_activity", "telecom_activity",
@@ -77,6 +77,19 @@ def grant_consent(db: Session, application: Application, choices: dict) -> dict:
         raise ApiError(
             409, "invalid_state",
             f"Application is '{application.status}'; expected step order: {STEP_ORDER}")
+
+    # Phase 3: the employment / document step happens while the application
+    # is 'verified' and must be completed before consent can be granted
+    employment = (
+        db.query(EmploymentVerification)
+        .filter(EmploymentVerification.application_id == application.id)
+        .first()
+    )
+    if employment is None:
+        raise ApiError(
+            409, "employment_verification_required",
+            "Complete the employment & financial document step before "
+            "granting consent for this application")
 
     required = applicable_categories(application.has_bank_account)
     declined = [c for c in required if not choices.get(c)]

@@ -228,6 +228,30 @@ export interface ConsentPublic {
   granted_at: string;
 }
 
+export interface EmploymentCheck {
+  check: string;
+  result: string;
+  detail: string;
+}
+
+// Phase 3: what the employment/document submission produced
+export interface EmploymentSubmitResult {
+  status: string;
+  status_label: string;
+  doc_type: string;
+  checks: EmploymentCheck[];
+  notice: string;
+}
+
+export interface EmploymentDetailPublic extends EmploymentSubmitResult {
+  occupation: string;
+  employer_name: string | null;
+  business_name: string | null;
+  declared_income: number | null;
+  document_captured: boolean;
+  created_at: string;
+}
+
 export interface QuestionnairePublic {
   psychometric_score: number;
   consistency_warnings: string[];
@@ -282,6 +306,8 @@ export interface ApplicationDetail {
   wallet_provider: string | null;
   applicant: ApplicantPublic;
   verification: VerificationPublic | null;
+  // Phase 3: employment / document verification (null until submitted)
+  employment: EmploymentDetailPublic | null;
   consent: ConsentPublic | null;
   questionnaire: QuestionnairePublic | null;
   assessment: AssessmentDetailPublic | null;
@@ -351,6 +377,22 @@ export interface ScoringResponse {
   report_filename: string;
 }
 
+/** Submit the Phase 3 employment / document verification step. */
+export async function submitEmployment(
+  applicationId: number,
+  fields: {
+    employer_name?: string;
+    business_name?: string;
+    declared_income?: number;
+    document_image?: string;
+  } = {},
+): Promise<EmploymentSubmitResult> {
+  return api.post<EmploymentSubmitResult>("/api/employment", {
+    application_id: applicationId,
+    ...fields,
+  });
+}
+
 // -------------------------------------------------------------------- helpers
 
 export const OCCUPATIONS = [
@@ -401,7 +443,9 @@ export function nextStepFor(status: string): string {
     case "created":
       return "/verify";
     case "verified":
-      return "/consent";
+      // the employment step runs while 'verified'; the page itself sends
+      // already-submitted applicants straight on to consent
+      return "/employment";
     case "consented":
       return "/assessment";
     case "assessed":

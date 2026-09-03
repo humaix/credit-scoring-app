@@ -27,7 +27,10 @@ type Choices = Record<string, boolean>;
 
 export default function ConsentPage() {
   const router = useRouter();
-  const { app, loading, error } = useCurrentApplication("verified");
+  const { app, loading, error } = useCurrentApplication("verified", {
+    // Phase 3: consent comes after the employment/document step
+    employment: "required",
+  });
 
   const [info, setInfo] = useState<ConsentInfoResponse | null>(null);
   const [infoError, setInfoError] = useState<unknown>(null);
@@ -94,7 +97,7 @@ export default function ConsentPage() {
 
   return (
     <div className="mx-auto max-w-xl">
-      <Stepper current={2} />
+      <Stepper current={3} />
       <Card>
         <h1 className="text-xl font-bold tracking-tight text-slate-900">
           Your data, your choice

@@ -13,7 +13,8 @@ from fastapi.testclient import TestClient
 import backend.routers.scoring as scoring_router
 from backend.main import app
 from backend.tests.flow import (
-    MODERATE, full_flow, likert_answers, score, unique_identity,
+    MODERATE, full_flow, likert_answers, score, submit_employment,
+    unique_identity,
 )
 
 
@@ -87,6 +88,8 @@ def test_step_status_transitions_visible_in_detail(client, offline_explanations)
         headers=headers).json()
     assert verified["status"] == "verified"
     assert _status() == "verified"
+
+    submit_employment(client, headers, application_id, MODERATE)
 
     consent = client.post("/api/consent", json={
         "application_id": application_id,

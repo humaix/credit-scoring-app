@@ -6,7 +6,9 @@ malformed requests for every request schema in the product.
 
 import pytest
 
-from backend.tests.flow import MODERATE, STRONG, WEAK, unique_identity
+from backend.tests.flow import (
+    MODERATE, STRONG, WEAK, submit_employment, unique_identity,
+)
 
 
 def _register(client):
@@ -204,6 +206,7 @@ def _walk_to_questionnaire(client):
     client.post("/api/verification/verify-otp",
                 json={"application_id": application_id,
                       "code": otp["simulated_otp"]}, headers=headers)
+    submit_employment(client, headers, application_id, MODERATE)
     client.post("/api/consent", json={
         "application_id": application_id,
         "wallet_activity": True, "telecom_activity": True,

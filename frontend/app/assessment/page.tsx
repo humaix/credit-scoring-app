@@ -79,7 +79,7 @@ export default function AssessmentPage() {
   if (result) {
     return (
       <div className="mx-auto max-w-xl">
-        <Stepper current={3} />
+        <Stepper current={4} />
         <Card>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">
             Assessment completed
@@ -132,7 +132,7 @@ export default function AssessmentPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <Stepper current={3} />
+      <Stepper current={4} />
       <Card>
         <h1 className="text-xl font-bold tracking-tight text-slate-900">
           Financial Behavior Assessment

@@ -89,7 +89,7 @@ export default function ResultsPage() {
 
   return (
     <div className="space-y-6">
-      <Stepper current={4} />
+      <Stepper current={5} />
 
       <Card className="rise-in">
         <div className="flex flex-col items-center gap-8 sm:flex-row sm:justify-around">
@@ -118,6 +118,14 @@ export default function ResultsPage() {
                 {app.verification?.status === "verified"
                   ? "Verified (simulated)"
                   : app.verification?.status ?? "—"}
+              </span>
+            </div>
+            <div className="flex justify-between gap-6">
+              <span className="text-slate-500">Employment verification</span>
+              <span className="font-semibold text-slate-900">
+                {app.employment
+                  ? `${app.employment.status_label} (prototype)`
+                  : "—"}
               </span>
             </div>
             <div className="flex justify-between gap-6">

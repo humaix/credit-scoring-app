@@ -118,7 +118,7 @@ flowchart TB
     end
 
     subgraph backend["FastAPI backend (Render / localhost:8000)"]
-        RT["Routers<br/>auth · applications · verification · consent<br/>assessment · scoring · meta"]
+        RT["Routers<br/>auth · applications · verification · employment<br/>consent · assessment · scoring · meta"]
         VA["5-layer validation"]
         FB["Feature builder<br/>(simulated providers, consent-gated)"]
         DB[("SQLite / PostgreSQL<br/>applicants · applications · records")]
@@ -160,14 +160,17 @@ memory.md           ML prototype development documentation
 
 An application walks a strict, server-enforced step order —
 `created → verified → consented → assessed → scored` — and no step can be
-skipped, repeated or done out of order.
+skipped, repeated or done out of order. The Phase 3 employment/document
+verification runs as a sub-step while the application is `verified` and
+must be completed before consent can be granted.
 
 ```mermaid
 flowchart TD
     A["Register / login<br/>(name + CNIC + email + mobile<br/>+ password + CNIC images)"] --> B["New application<br/>bank-account question →<br/>bank details when YES ·<br/>age · occupation · income ·<br/>debt payments · loan history · loan size · purchases"]
     B --> C["Identity verification<br/>simulated OTP (6 digits, 5 attempts, 5-min TTL)"]
     C -- "registry miss<br/>(CNIC starts 00000)" --> F1["Status: failed —<br/>flow cannot continue"]
-    C -- verified --> D["Consent<br/>4 alternative-data categories<br/>+ bank data when the applicant<br/>declared a bank account"]
+    C -- verified --> D3["Employment & income verification<br/>salaried: employer + salary + salary slip ·<br/>business/self-employed: business + income<br/>+ bank statement when they declared a bank<br/>other occupations: no document required"]
+    D3 --> D["Consent<br/>4 alternative-data categories<br/>+ bank data when the applicant<br/>declared a bank account"]
     D -- declined --> F2["422: no score can be<br/>produced without consent"]
     D -- granted --> E["Financial Behavior Assessment<br/>12 Likert questions → psychometric score"]
     E --> S["Scoring: features → XGBoost → SHAP → LLM → PDF"]
@@ -305,8 +308,9 @@ validation, and a sanitized catch-all 500 that never leaks internals).
 | GET | `/api/applications/{id}/report` | stream the applicant's PDF |
 | POST | `/api/verification/request-otp` | simulated OTP (clearly labelled; returned in response in demo mode) |
 | POST | `/api/verification/verify-otp` | verify OTP + simulated registry check |
+| POST | `/api/employment` | employment & document verification — salary slip (salaried), bank statement (business with a bank account), or no document required; honest `Pending Provider Verification` status |
 | GET | `/api/consent/info` | consent categories + descriptions (bank category included) |
-| POST | `/api/consent` | record consent — four categories always, plus bank data when the applicant declared a bank account |
+| POST | `/api/consent` | record consent — four categories always, plus bank data when the applicant declared a bank account (requires the employment step) |
 | GET | `/api/assessment/questions` | the 12 questions (reversed flags stay internal) |
 | POST | `/api/assessment/psychometric` | submit answers → psychometric score + warnings |
 | POST | `/api/scoring/predict` | score, explain and persist (returns contributors, explanation, disclaimer) |
@@ -431,14 +435,23 @@ Run locally (`uvicorn` + `npm run dev`) or on the deployed URLs, then:
    twice to show the attempt countdown, then correctly to proceed.
    *(Bonus path: a CNIC starting `00000` simulates a registry miss — the
    verification fails and the flow correctly refuses to continue.)*
-3. **Grant consent** — four alternative-data categories (plus bank data
+3. **Employment & income verification** — the step adapts to the declared
+   occupation: **Salaried** → employer name, monthly salary and a camera-
+   captured salary slip; **Business Owner / Self-Employed** → business name
+   and re-confirmed income, plus a **bank statement only when a bank account
+   was declared**; every other occupation → "no document required" and
+   straight through. The honest status is **Pending Provider Verification**
+   (Document-Based Prototype Verification — no OCR, no employer/bank
+   integration). Capture quality and a declared-salary-vs-income comparison
+   are checked; a mismatch is *flagged for review*, never a rejection.
+4. **Grant consent** — four alternative-data categories (plus bank data
    when you declared a bank account); try declining to show that scoring is
    impossible without consent. An applicant with **no bank account** is
    never asked for bank-data consent and still completes the assessment.
-4. **Take the assessment** — answer the 12 questions; answer a related pair
+5. **Take the assessment** — answer the 12 questions; answer a related pair
    in opposite directions to trigger a consistency *warning* (shown, never
    enforced).
-5. **Score and explain** — three demo profiles:
+6. **Score and explain** — three demo profiles:
 
    | Profile | Age / Occupation | Income / Debt | Loan history | Loan size / Purchases | Likert | Result |
    |---|---|---|---|---|---|---|
@@ -446,17 +459,17 @@ Run locally (`uvicorn` + `npm run dev`) or on the deployed URLs, then:
    | Moderate | 38 · Self-Employed | 65,000 / 19,500 | No Previous Loan | 500,000 / 5 | mid | **≈ 54.3 · Moderate** |
    | Weak | 26 · Daily Wage Worker | 28,000 / 15,400 | Previous Default | 350,000 / 2 | low | **≈ 8.4 · Very Low** |
 
-6. **Show the explanation** — top positive/negative factors with real SHAP
+7. **Show the explanation** — top positive/negative factors with real SHAP
    values, the contribution chart, and the plain-English explanation. Point
    out the disclaimer on the page.
-7. **Download the PDF** — same score, same factors, same disclaimer, plus the
+8. **Download the PDF** — same score, same factors, same disclaimer, plus the
    applicant's feature values.
-8. **Kill the LLM** (unset `LLM_API_KEY`, or just say it) — the same flow
+9. **Kill the LLM** (unset `LLM_API_KEY`, or just say it) — the same flow
    completes with "Standard templates": the fallback wording is built from
    the same SHAP signs, demonstrating that the product never depends on the
    LLM being up.
-9. **Cross-applicant isolation** (API demo): use another session's token
-   against someone else's application id → 404.
+10. **Cross-applicant isolation** (API demo): use another session's token
+    against someone else's application id → 404.
 
 The story the demo tells: *"A financially underserved applicant who may not
 have traditional banking history can provide consented alternative

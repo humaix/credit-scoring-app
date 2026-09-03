@@ -7,7 +7,8 @@ from pypdf import PdfReader
 
 from backend.scoring import REPORTS_DIR
 from backend.tests.flow import (
-    MODERATE, STRONG, WEAK, full_flow, likert_answers, score, unique_identity,
+    MODERATE, STRONG, WEAK, full_flow, likert_answers, score,
+    submit_employment, unique_identity,
 )
 from explanation_utils import score_category
 
@@ -149,6 +150,7 @@ def test_scoring_requires_completed_assessment(client, offline_explanations):
     client.post("/api/verification/verify-otp",
                 json={"application_id": application_id,
                       "code": otp["simulated_otp"]}, headers=headers)
+    submit_employment(client, headers, application_id, MODERATE)
     client.post("/api/consent", json={
         "application_id": application_id,
         "wallet_activity": True, "telecom_activity": True,

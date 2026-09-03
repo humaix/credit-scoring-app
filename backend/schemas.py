@@ -261,6 +261,38 @@ class ConsentGrantRequest(ApplicationRef):
     bank_account_data: bool = False
 
 
+class EmploymentSubmitRequest(ApplicationRef):
+    """Phase 3: occupation-dependent employment / document submission.
+
+    Which fields are required (or accepted at all) depends on the
+    application's occupation and bank declaration — enforced by the
+    employment service with precise error messages, because the rules
+    reference application state pydantic cannot see.
+    """
+    employer_name: str | None = Field(default=None, max_length=100)
+    business_name: str | None = Field(default=None, max_length=100)
+    # the monthly salary (salaried) or re-confirmed monthly income
+    # (business owners / self-employed)
+    declared_income: float | None = Field(default=None, gt=0)
+    # base64 document image (a data: URL prefix is tolerated and stripped)
+    document_image: str | None = Field(default=None, max_length=11_000_000)
+
+    @field_validator("employer_name", "business_name")
+    @classmethod
+    def _clean_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    @field_validator("document_image")
+    @classmethod
+    def _clean_image(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        return value
+
+
 class QuestionnaireSubmit(ApplicationRef):
     answers: list[int] = Field(min_length=12, max_length=12)
 
@@ -321,6 +353,33 @@ class ConsentPublic(BaseModel):
     # consented to sharing bank/statement data
     bank_account_data: bool = False
     granted_at: datetime
+
+
+class EmploymentCheck(BaseModel):
+    check: str
+    result: str
+    detail: str
+
+
+class EmploymentSubmitResponse(BaseModel):
+    """What the Phase 3 submission produced — status plus the honest notice."""
+    status: str
+    status_label: str
+    # salary_slip | bank_statement | not_required
+    doc_type: str
+    checks: list[EmploymentCheck]
+    notice: str
+
+
+class EmploymentPublic(EmploymentSubmitResponse):
+    """The stored employment verification, as shown in the application detail."""
+    occupation: str
+    employer_name: str | None = None
+    business_name: str | None = None
+    declared_income: float | None = None
+    # the stored filename never leaves the API — only this fact does
+    document_captured: bool = False
+    created_at: datetime
 
 
 class QuestionnairePublic(BaseModel):
@@ -388,6 +447,8 @@ class ApplicationDetail(ApplicationSummary):
     wallet_provider: str | None = None
     applicant: ApplicantPublic
     verification: VerificationPublic | None = None
+    # Phase 3: employment / document verification (null until submitted)
+    employment: EmploymentPublic | None = None
     consent: ConsentPublic | None = None
     questionnaire: QuestionnairePublic | None = None
     assessment: AssessmentPublic | None = None

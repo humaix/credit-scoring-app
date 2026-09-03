@@ -181,7 +181,9 @@ export function StatusBadge({ status }: { status: string }) {
   );
 }
 
-const STEPS = ["Application", "Identity", "Consent", "Assessment", "Result"];
+const STEPS = [
+  "Application", "Identity", "Documents", "Consent", "Assessment", "Result",
+];
 
 export function Stepper({ current }: { current: number }) {
   return (
@@ -246,9 +248,20 @@ export function useRequireSession(): boolean {
  * Redirects to /login without a session, /dashboard without an application,
  * and to the application's actual next step when the status doesn't match
  * `expectedStatus` — so no step can be done out of order or twice.
+ *
+ * `employment` guards the Phase 3 sub-step that runs while the application
+ * is 'verified': "required" sends applications without an employment
+ * submission to /employment (used by the consent page), "absent" sends
+ * already-submitted ones on to /consent (used by the employment page).
  */
-export function useCurrentApplication(expectedStatus?: string) {
+export function useCurrentApplication(
+  expectedStatus?: string,
+  options?: { employment?: "required" | "absent" },
+) {
   const router = useRouter();
+  // a primitive so the effect below doesn't re-run on every render when
+  // callers pass an inline options object
+  const employmentGuard = options?.employment;
   const [app, setApp] = useState<ApplicationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -273,6 +286,14 @@ export function useCurrentApplication(expectedStatus?: string) {
           router.replace(nextStepFor(detail.status));
           return;
         }
+        if (employmentGuard === "required" && !detail.employment) {
+          router.replace("/employment");
+          return;
+        }
+        if (employmentGuard === "absent" && detail.employment) {
+          router.replace("/consent");
+          return;
+        }
         setApp(detail);
         setLoading(false);
       })
@@ -284,7 +305,7 @@ export function useCurrentApplication(expectedStatus?: string) {
     return () => {
       cancelled = true;
     };
-  }, [router, expectedStatus]);
+  }, [router, expectedStatus, employmentGuard]);
 
   return { app, loading, error };
 }
