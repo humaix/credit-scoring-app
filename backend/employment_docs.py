@@ -6,6 +6,10 @@ business and income and capture a bank statement when they declared a bank
 account. Documents run the same quality checks as CNIC images (format,
 dimensions, size, brightness) plus a duplicate screen against the
 applicant's stored CNIC images — catching lazy reuse of an unrelated photo.
+The declared salary/income must also be consistent with the monthly income
+stated in the application (within SALARY_INCOME_TOLERANCE) — a larger gap
+is rejected outright so the flow never proceeds on contradictory income
+figures.
 
 This prototype performs NO OCR and has no employer / bank / open-banking
 integration: reading a document would not prove it authentic anyway. A
@@ -50,7 +54,7 @@ DOC_STATUS_NOTICE = (
 
 # declared salary/income vs the application's declared monthly income within
 # this fraction counts as consistent (bonuses, deductions and rounding make
-# small gaps normal)
+# small gaps normal); a larger gap is rejected (employment_income_mismatch)
 SALARY_INCOME_TOLERANCE = 0.2
 
 _DOC_LABELS = {
@@ -115,7 +119,12 @@ def build_checks(doc_type: str, info: dict | None,
                  declared_income: float | None = None,
                  monthly_income: float | None = None,
                  no_doc_detail: str | None = None) -> list:
-    """The prototype checks performed on one submission, as stored records."""
+    """The prototype checks performed on one submission, as stored records.
+
+    Only consistent submissions reach this point — an income gap beyond
+    SALARY_INCOME_TOLERANCE is rejected by submit_employment before
+    anything is stored, so income_consistency is always a pass here.
+    """
     if doc_type == "not_required" or info is None:
         checks = [{
             "check": "document_applicability",
@@ -139,24 +148,14 @@ def build_checks(doc_type: str, info: dict | None,
         ]
     if declared_income is not None and monthly_income:
         gap = abs(declared_income - monthly_income) / monthly_income
-        if gap > SALARY_INCOME_TOLERANCE:
-            checks.append({
-                "check": "income_consistency",
-                "result": "flag",
-                "detail": (f"declared salary/income {declared_income:,.0f} "
-                           f"differs from the application's monthly income "
-                           f"{monthly_income:,.0f} by {gap:.0%} — flagged "
-                           f"for review"),
-            })
-        else:
-            checks.append({
-                "check": "income_consistency",
-                "result": "pass",
-                "detail": (f"declared salary/income {declared_income:,.0f} is "
-                           f"within {SALARY_INCOME_TOLERANCE:.0%} of the "
-                           f"application's monthly income "
-                           f"{monthly_income:,.0f}"),
-            })
+        checks.append({
+            "check": "income_consistency",
+            "result": "pass",
+            "detail": (f"declared salary/income {declared_income:,.0f} is "
+                       f"within {SALARY_INCOME_TOLERANCE:.0%} of the "
+                       f"application's monthly income "
+                       f"{monthly_income:,.0f} (gap {gap:.0%})"),
+        })
     return checks
 
 
@@ -189,6 +188,36 @@ def _check_fields(payload, allowed: set, required: set, message: str) -> None:
     if missing:
         raise ApiError(422, "employment_details_required", message.format(
             missing=", ".join(missing)))
+
+
+def _check_income_consistency(application: Application, doc_type: str,
+                              declared_income: float) -> None:
+    """Reject a declared income inconsistent with the application's.
+
+    The salary/income declared in this step (entered alongside the salary
+    slip, the bank statement or the bare business declaration) must be
+    within SALARY_INCOME_TOLERANCE of the monthly income stated in the
+    application. A larger gap means the two mandatory declarations
+    contradict each other, so the submission is rejected — the application
+    cannot proceed until the applicant corrects the amount (or starts a
+    new application if the income stated there was wrong).
+    """
+    stated = application.monthly_income
+    gap = abs(declared_income - stated) / stated
+    if gap <= SALARY_INCOME_TOLERANCE:
+        return
+    source = {
+        "salary_slip": "the salary on your salary slip",
+        "bank_statement": "the income declared with your bank statement",
+    }.get(doc_type, "the income you re-confirmed in this step")
+    raise ApiError(
+        422, "employment_income_mismatch",
+        f"The monthly income stated in your application "
+        f"(PKR {stated:,.0f}) and {source} (PKR {declared_income:,.0f}) "
+        f"differ by {gap:.0%} — more than the allowed "
+        f"{SALARY_INCOME_TOLERANCE:.0%}. The application cannot proceed "
+        f"with inconsistent income figures: correct the amount above, or "
+        f"start a new application if the income stated there was wrong.")
 
 
 def submit_employment(db: Session, application: Application, payload) -> dict:
@@ -236,6 +265,12 @@ def submit_employment(db: Session, application: Application, payload) -> dict:
                      "provide: {missing}"))
     else:
         _check_fields(payload, allowed=set(), required=set(), message="")
+
+    # the declared salary/income must agree with the application's stated
+    # monthly income — a gap beyond the tolerance blocks the submission
+    if payload.declared_income is not None:
+        _check_income_consistency(
+            application, doc_type, payload.declared_income)
 
     if doc_type == "not_required":
         notice = no_document_notice(

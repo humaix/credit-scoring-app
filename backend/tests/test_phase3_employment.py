@@ -4,9 +4,11 @@ Covers the new-spec Phase 3 requirements: occupation-dependent capture
 (salaried -> employer + salary + salary slip; business owners / self-employed
 -> business + income + bank statement only when a bank account was declared),
 prototype quality checks, honest status labels ("Pending Provider
-Verification" — no OCR, no provider), the declared-income consistency check,
-consent gating on the completed employment step, and financial inclusion —
-occupations without an applicable document still complete the assessment.
+Verification" — no OCR, no provider), the blocking declared-income
+consistency check (a gap beyond 20% of the application's stated monthly
+income is rejected), consent gating on the completed employment step, and
+financial inclusion — occupations without an applicable document still
+complete the assessment.
 """
 
 import pytest
@@ -219,21 +221,71 @@ def test_occupations_without_document_proceed_on_alternative_data(
 
 # -------------------------------------------------------- prototype checks
 
-def test_income_consistency_flagged_but_never_blocks(client):
+def test_income_mismatch_blocks_the_submission(client):
     headers = _register(client)
     application_id = _create(client, headers, SALARIED)
     _verify_otp(client, headers, application_id)
 
-    # salary declared far below the application's monthly income -> flag
+    # salary on the slip far below the application's monthly income
     response = _submit(client, headers, application_id,
                        employer_name="Systems Ltd", declared_income=20000,
                        document_image=document_image_b64())
-    assert response.status_code == 200
-    flagged = {c["check"]: c for c in response.json()["checks"]}
-    assert flagged["income_consistency"]["result"] == "flag"
-    assert "flagged for review" in flagged["income_consistency"]["detail"]
-    # a flag is review material, never a rejection or a score change
+    assert response.status_code == 422
+    body = response.json()["error"]
+    assert body["code"] == "employment_income_mismatch"
+    # the error names both amounts and the allowed range
+    assert "60,000" in body["message"]
+    assert "20,000" in body["message"]
+    assert "20%" in body["message"]
+    assert "cannot proceed" in body["message"]
+
+    # nothing was stored — the applicant can correct the amount and retry
+    db = SessionLocal()
+    try:
+        assert db.query(EmploymentVerification).filter_by(
+            application_id=application_id).count() == 0
+    finally:
+        db.close()
+
+    # a consistent retry goes through
+    response = _submit(client, headers, application_id,
+                       employer_name="Systems Ltd", declared_income=55000,
+                       document_image=document_image_b64())
+    assert response.status_code == 200, response.text
     assert response.json()["status"] == "needs_review"
+    results = {c["check"]: c["result"] for c in response.json()["checks"]}
+    assert results["income_consistency"] == "pass"
+
+
+def test_income_mismatch_uses_bank_statement_wording(client):
+    headers = _register(client)
+    application_id = _create(client, headers, WITH_BANK)
+    _verify_otp(client, headers, application_id)
+
+    # declared income far above the application's monthly income
+    response = _submit(client, headers, application_id,
+                       business_name="Raza Traders", declared_income=90000,
+                       document_image=document_image_b64())
+    assert response.status_code == 422
+    body = response.json()["error"]
+    assert body["code"] == "employment_income_mismatch"
+    assert "bank statement" in body["message"]
+    assert "65,000" in body["message"]
+    assert "90,000" in body["message"]
+
+
+def test_income_exactly_at_the_tolerance_is_accepted(client):
+    headers = _register(client)
+    application_id = _create(client, headers, SALARIED)
+    _verify_otp(client, headers, application_id)
+
+    # 72,000 is exactly +20% of the stated 60,000 — still consistent
+    response = _submit(client, headers, application_id,
+                       employer_name="Systems Ltd", declared_income=72000,
+                       document_image=document_image_b64())
+    assert response.status_code == 200, response.text
+    results = {c["check"]: c["result"] for c in response.json()["checks"]}
+    assert results["income_consistency"] == "pass"
 
 
 def test_document_identical_to_cnic_is_rejected(client):

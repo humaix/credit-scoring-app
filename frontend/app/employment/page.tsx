@@ -42,7 +42,8 @@ export default function EmploymentPage() {
   const isBusiness = BUSINESS_OCCUPATIONS.includes(app.occupation);
   // business applicants re-confirm the income they declared when applying
   // (prefilled until they edit it); salaried applicants enter their salary
-  // fresh — it can differ from the total income the application captured
+  // fresh — either way it must stay within 20% of the application's stated
+  // income (server-enforced: a larger gap rejects the submission)
   const incomeField =
     declaredIncome ?? (isBusiness ? String(app.monthly_income) : "");
   // the bank statement exists only for business applicants WITH a bank
@@ -135,13 +136,7 @@ export default function EmploymentPage() {
                     key={check.check}
                     className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-xs leading-relaxed"
                   >
-                    <span
-                      className={`mt-0.5 font-bold ${
-                        check.result === "flag" ? "text-amber-600" : "text-emerald-600"
-                      }`}
-                    >
-                      {check.result === "flag" ? "⚑" : "✓"}
-                    </span>
+                    <span className="mt-0.5 font-bold text-emerald-600">✓</span>
                     <span className="text-slate-700">
                       <span className="font-semibold">
                         {check.check.replace(/_/g, " ")}
@@ -188,6 +183,12 @@ export default function EmploymentPage() {
               {app.has_bank_account ? app.bank_name : "None declared"}
             </span>
           </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Income stated in application</span>
+            <span className="font-medium text-slate-900">
+              PKR {app.monthly_income.toLocaleString()}/month
+            </span>
+          </div>
         </div>
 
         <div className="mt-4">
@@ -211,7 +212,10 @@ export default function EmploymentPage() {
                 maxLength={100}
               />
             </Field>
-            <Field label="Monthly salary (PKR)" hint="Your gross monthly salary as shown on your slip.">
+            <Field
+              label="Monthly salary (PKR)"
+              hint="Your gross monthly salary as shown on your slip — it must be within 20% of the income stated in your application."
+            >
               <input
                 className={inputClass}
                 value={incomeField}
@@ -236,7 +240,7 @@ export default function EmploymentPage() {
             </Field>
             <Field
               label="Declared monthly income (PKR)"
-              hint="Confirm or correct the income you declared when applying — checked for consistency only."
+              hint="Confirm or correct the income you declared when applying — it must stay within 20% of that amount."
             >
               <input
                 className={inputClass}

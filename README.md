@@ -442,8 +442,11 @@ Run locally (`uvicorn` + `npm run dev`) or on the deployed URLs, then:
    was declared**; every other occupation → "no document required" and
    straight through. The honest status is **Pending Provider Verification**
    (Document-Based Prototype Verification — no OCR, no employer/bank
-   integration). Capture quality and a declared-salary-vs-income comparison
-   are checked; a mismatch is *flagged for review*, never a rejection.
+   integration). Capture quality is checked, and the declared salary/income
+   must be within **20%** of the income stated in the application — a
+   larger gap is **rejected with a clear error naming both amounts**, so
+   the application cannot proceed on contradictory income figures (try
+   entering a salary far from the application's stated income).
 4. **Grant consent** — four alternative-data categories (plus bank data
    when you declared a bank account); try declining to show that scoring is
    impossible without consent. An applicant with **no bank account** is
