@@ -7,6 +7,11 @@ uvicorn==0.47.0
 SQLAlchemy==2.0.52
 pydantic==2.13.5
 
+# Phase 1 authentication: bcrypt password hashing (rounds=12) and PIL-based
+# CNIC image validation on the register endpoint
+bcrypt==5.0.0
+pillow==12.1.1
+
 # only needed when DATABASE_URL points at PostgreSQL (Render Postgres /
 # Supabase); the SQLite default needs no extra driver
 psycopg2-binary>=2.9,<3.0

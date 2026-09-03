@@ -11,11 +11,14 @@ __pycache__/
 # databases (runtime state)
 *.db
 *.sqlite3
-*.db.bak
+*.db.bak*
 
 # generated outputs (regenerable at runtime)
 explainability/generated_reports/
 generated_reports/
+
+# applicant uploads (CNIC images are personal data - never commit)
+uploads/
 
 # node / next.js
 node_modules/

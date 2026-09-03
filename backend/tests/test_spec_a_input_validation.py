@@ -45,14 +45,15 @@ def test_valid_registration_and_login(client):
     response = client.post("/api/auth/register", json=identity)
     assert response.status_code == 200
     response = client.post("/api/auth/login", json={
-        "cnic": identity["cnic"], "mobile": identity["mobile"]})
+        "cnic": identity["cnic"], "password": identity["password"]})
     assert response.status_code == 200
 
 
 # ---------------------------------------------------------- missing fields
 
 @pytest.mark.parametrize("missing", [
-    "full_name", "cnic", "mobile",
+    "full_name", "cnic", "mobile", "email", "password",
+    "confirm_password", "cnic_front_image", "cnic_back_image",
 ])
 def test_register_missing_fields(client, missing):
     payload = {k: v for k, v in unique_identity().items() if k != missing}

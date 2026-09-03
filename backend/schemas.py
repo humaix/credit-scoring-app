@@ -11,8 +11,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from explanation_utils import NUMERIC_RANGES, VALID_LOAN_HISTORY, VALID_OCCUPATIONS
 
+from .security import validate_password_policy
+
 CNIC_PATTERN = re.compile(r"^\d{5}-\d{7}-\d{1}$")
 MOBILE_PATTERN = re.compile(r"^03\d{9}$")
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _within_model_range(key: str, value: float) -> float:
@@ -27,7 +30,13 @@ def _within_model_range(key: str, value: float) -> float:
 class RegisterRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=100)
     cnic: str
+    email: str = Field(max_length=120)
     mobile: str
+    password: str = Field(max_length=128)
+    confirm_password: str = Field(max_length=128)
+    # base64-encoded images (a data: URL prefix is tolerated and stripped)
+    cnic_front_image: str = Field(min_length=32, max_length=11_000_000)
+    cnic_back_image: str = Field(min_length=32, max_length=11_000_000)
 
     @field_validator("cnic")
     @classmethod
@@ -46,10 +55,69 @@ class RegisterRequest(BaseModel):
                 "e.g. 03001234567")
         return value
 
+    @field_validator("email")
+    @classmethod
+    def _valid_email(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not EMAIL_PATTERN.match(value):
+            raise ValueError(
+                "email must be a valid email address, e.g. you@example.com")
+        return value
+
+    @field_validator("password")
+    @classmethod
+    def _valid_password(cls, value: str) -> str:
+        return validate_password_policy(value)
+
+    @model_validator(mode="after")
+    def _passwords_match(self):
+        if self.password != self.confirm_password:
+            raise ValueError("confirm_password must match password")
+        return self
+
 
 class LoginRequest(BaseModel):
+    """CNIC is the primary login identifier — never the email address."""
+
     cnic: str
-    mobile: str
+    password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("cnic")
+    @classmethod
+    def _valid_cnic(cls, value: str) -> str:
+        if not CNIC_PATTERN.match(value):
+            raise ValueError(
+                "cnic must use the format XXXXX-XXXXXXX-X, e.g. 35202-1234567-1")
+        return value
+
+
+class ForgotPasswordRequest(BaseModel):
+    cnic: str
+
+    @field_validator("cnic")
+    @classmethod
+    def _valid_cnic(cls, value: str) -> str:
+        if not CNIC_PATTERN.match(value):
+            raise ValueError(
+                "cnic must use the format XXXXX-XXXXXXX-X, e.g. 35202-1234567-1")
+        return value
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=256)
+    new_password: str = Field(max_length=128)
+    confirm_password: str = Field(max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _valid_password(cls, value: str) -> str:
+        return validate_password_policy(value)
+
+    @model_validator(mode="after")
+    def _passwords_match(self):
+        if self.new_password != self.confirm_password:
+            raise ValueError("confirm_password must match new_password")
+        return self
 
 
 # API field name -> model feature name (ranges come from the model's rules)
@@ -139,11 +207,29 @@ class ApplicantPublic(BaseModel):
     full_name: str
     cnic_masked: str
     mobile_masked: str
+    email_masked: str = ""
+    cnic_status: str = "pending"
 
 
 class RegisterResponse(BaseModel):
     session_token: str
     applicant: ApplicantPublic
+    cnic_notice: str | None = None
+
+
+class LogoutResponse(BaseModel):
+    status: str
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str
+    # present only in development mode (SMTP unconfigured + DEV_SHOW_RESET_LINK)
+    dev_reset_url: str | None = None
+    dev_notice: str | None = None
+
+
+class ResetPasswordResponse(BaseModel):
+    message: str
 
 
 class VerificationPublic(BaseModel):

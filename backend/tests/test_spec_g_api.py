@@ -51,7 +51,7 @@ def test_login_returns_session_and_existing_applications(client):
     ).json()["application_id"]
 
     response = client.post("/api/auth/login", json={
-        "cnic": identity["cnic"], "mobile": identity["mobile"]})
+        "cnic": identity["cnic"], "password": identity["password"]})
     assert response.status_code == 200
     body = response.json()
     assert body["session_token"]

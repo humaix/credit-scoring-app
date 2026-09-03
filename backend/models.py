@@ -27,10 +27,45 @@ class Applicant(Base):
     full_name: Mapped[str] = mapped_column(String(100))
     cnic: Mapped[str] = mapped_column(String(15), unique=True, index=True)
     mobile: Mapped[str] = mapped_column(String(20))
-    session_token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    session_token: Mapped[str | None] = mapped_column(
+        String(64), unique=True, index=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
+    # ---- Phase 1 authentication -------------------------------------------
+    # email is nullable only so pre-existing demo databases keep loading;
+    # every new registration requires it (password-recovery target)
+    email: Mapped[str | None] = mapped_column(
+        String(120), unique=True, index=True, nullable=True)
+    # bcrypt hash — the plain-text password is never stored or logged
+    password_hash: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # captured CNIC documents (server-generated filenames under uploads/cnic/)
+    cnic_front_filename: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    cnic_back_filename: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    # pending | prototype_verified — honest status: format + image checks
+    # passed; no NADRA verification and no OCR comparison is performed
+    cnic_status: Mapped[str] = mapped_column(String(30), default="pending")
+
     applications: Mapped[list["Application"]] = relationship(back_populates="applicant")
+    reset_tokens: Mapped[list["PasswordResetToken"]] = relationship(
+        back_populates="applicant", cascade="all, delete-orphan")
+
+
+class PasswordResetToken(Base):
+    """Single-use, expiring password-reset token (hash only, never raw)."""
+
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    applicant_id: Mapped[int] = mapped_column(
+        ForeignKey("applicants.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    applicant: Mapped["Applicant"] = relationship(back_populates="reset_tokens")
 
 
 class Application(Base):

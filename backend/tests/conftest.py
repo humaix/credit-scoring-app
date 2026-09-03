@@ -1,17 +1,23 @@
 """Shared test fixtures — isolated SQLite database for the API tests.
 
-The DATABASE_URL environment override happens before any backend import so
-tests never touch the real credit_scoring.db.
+The DATABASE_URL and UPLOADS_DIR environment overrides happen before any
+backend import so tests never touch the real credit_scoring.db or the real
+uploads directory.
 """
 
 import os
-import secrets
+import shutil
 from pathlib import Path
 
-_TEST_DB = Path(__file__).resolve().parent / "_test_api.db"
+_TEST_DIR = Path(__file__).resolve().parent
+_TEST_DB = _TEST_DIR / "_test_api.db"
+_TEST_UPLOADS = _TEST_DIR / "_test_uploads"
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB}"
+os.environ["UPLOADS_DIR"] = str(_TEST_UPLOADS)
 if _TEST_DB.exists():
     _TEST_DB.unlink()
+if _TEST_UPLOADS.exists():
+    shutil.rmtree(_TEST_UPLOADS)
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -26,6 +32,8 @@ def _cleanup_db():
     engine.dispose()  # release the SQLite file handle on Windows
     if _TEST_DB.exists():
         _TEST_DB.unlink()
+    if _TEST_UPLOADS.exists():
+        shutil.rmtree(_TEST_UPLOADS)
 
 
 @pytest.fixture()
@@ -49,12 +57,8 @@ def offline_explanations(monkeypatch):
 @pytest.fixture()
 def session_headers(client):
     """A registered applicant's auth headers (unique CNIC per test)."""
-    suffix = f"{secrets.randbelow(10_000_000):07d}"  # digits only
-    payload = {
-        "full_name": "Ayesha Khan",
-        "cnic": f"35202-{suffix}-1",
-        "mobile": "03001234567",
-    }
-    response = client.post("/api/auth/register", json=payload)
+    from backend.tests.flow import unique_identity
+
+    response = client.post("/api/auth/register", json=unique_identity())
     assert response.status_code == 200, response.text
     return {"X-Session-Token": response.json()["session_token"]}

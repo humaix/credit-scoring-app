@@ -2,6 +2,8 @@
 
 import itertools
 
+from backend.tests.flow import cnic_image_b64
+
 VALID_APPLICATION = {
     "age": 35,
     "occupation": "Salaried",
@@ -16,12 +18,17 @@ _identity_counter = itertools.count(1)
 
 
 def _unique_identity():
-    """A distinct but format-valid identity per call (tests share one DB)."""
+    """A distinct, complete registration payload per call (shared DB)."""
     n = next(_identity_counter)
     return {
         "full_name": "Bilal Ahmed",
         "cnic": f"42201-{n:07d}-2",
+        "email": f"bilal{n}@example.com",
         "mobile": "03211234567",
+        "password": "Roshan123",
+        "confirm_password": "Roshan123",
+        "cnic_front_image": cnic_image_b64(),
+        "cnic_back_image": cnic_image_b64(),
     }
 
 
@@ -53,9 +60,14 @@ def test_malformed_json_returns_structured_error(client):
 
 def test_register_field_validation(client):
     cases = [
-        {"full_name": "B", "cnic": "42201-1234567-2", "mobile": "03211234567"},
-        {"full_name": "Bilal Ahmed", "cnic": "4220112345672", "mobile": "03211234567"},
-        {"full_name": "Bilal Ahmed", "cnic": "42201-1234567-2", "mobile": "3211234567"},
+        {"full_name": "B", "cnic": "42201-1234567-2", "email": "b@example.com",
+         "mobile": "03211234567", "password": "Roshan123",
+         "confirm_password": "Roshan123",
+         "cnic_front_image": cnic_image_b64(), "cnic_back_image": cnic_image_b64()},
+        {**_unique_identity(), "cnic": "4220112345672"},
+        {**_unique_identity(), "mobile": "3211234567"},
+        {**_unique_identity(), "email": "not-an-email"},
+        {**_unique_identity(), "password": "short1"},
     ]
     for payload in cases:
         response = client.post("/api/auth/register", json=payload)
@@ -90,17 +102,19 @@ def test_login(client):
     identity = _unique_identity()
     _register(client, identity)
     response = client.post("/api/auth/login", json={
-        "cnic": identity["cnic"], "mobile": identity["mobile"]})
+        "cnic": identity["cnic"], "password": identity["password"]})
     assert response.status_code == 200
     assert response.json()["session_token"]
-    # wrong mobile -> rejected
+    # wrong password -> rejected
     response = client.post("/api/auth/login", json={
-        "cnic": identity["cnic"], "mobile": "03009999999"})
+        "cnic": identity["cnic"], "password": "WrongPass9"})
     assert response.status_code == 401
-    # unknown CNIC -> rejected
+    # unknown CNIC -> rejected with the identical message (no enumeration)
     response = client.post("/api/auth/login", json={
-        "cnic": "11111-1111111-1", "mobile": "03009999999"})
+        "cnic": "11111-1111111-1", "password": "Whatever1"})
     assert response.status_code == 401
+    assert (response.json()["error"]["message"]
+            == "CNIC or password is incorrect")
 
 
 def test_create_application_requires_session(client):
@@ -151,7 +165,12 @@ def test_application_ownership_isolated(client):
     other = _register(client, {
         "full_name": "Sana Malik",
         "cnic": "35201-7654321-9",
+        "email": "sana.malik@example.com",
         "mobile": "03331234567",
+        "password": "Roshan123",
+        "confirm_password": "Roshan123",
+        "cnic_front_image": cnic_image_b64(),
+        "cnic_back_image": cnic_image_b64(),
     })
     other_headers = {"X-Session-Token": other["session_token"]}
 

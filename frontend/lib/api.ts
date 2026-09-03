@@ -23,8 +23,8 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token =
-    typeof window === "undefined" ? null : localStorage.getItem("ccs_session");
+  // the token may live in localStorage (remember me) or sessionStorage
+  const token = sessionToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
@@ -60,8 +60,7 @@ export const api = {
 
 /** Download the applicant's PDF report (blob download with session header). */
 export async function downloadReport(applicationId: number): Promise<void> {
-  const token =
-    typeof window === "undefined" ? null : localStorage.getItem("ccs_session");
+  const token = sessionToken();
   const res = await fetch(
     `${API_BASE}/api/applications/${applicationId}/report`,
     { headers: token ? { "X-Session-Token": token } : {} },
@@ -99,27 +98,47 @@ function announceSessionChange() {
   }
 }
 
-export function saveSession(token: string, name: string) {
-  localStorage.setItem("ccs_session", token);
-  localStorage.setItem("ccs_name", name);
+export function saveSession(token: string, name: string, remember = true) {
+  // "Remember me": localStorage persists across browser restarts;
+  // sessionStorage is cleared when the browser window closes
+  const storage = remember ? localStorage : sessionStorage;
+  const other = remember ? sessionStorage : localStorage;
+  other.removeItem("ccs_session");
+  other.removeItem("ccs_name");
+  storage.setItem("ccs_session", token);
+  storage.setItem("ccs_name", name);
   announceSessionChange();
 }
 
+function readSessionKey(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(key) ?? sessionStorage.getItem(key);
+}
+
 export function sessionToken(): string | null {
-  return typeof window === "undefined"
-    ? null
-    : localStorage.getItem("ccs_session");
+  return readSessionKey("ccs_session");
 }
 
 export function displayName(): string {
-  return typeof window === "undefined" ? "" : localStorage.getItem("ccs_name") ?? "";
+  return readSessionKey("ccs_name") ?? "";
 }
 
 export function clearSession() {
   localStorage.removeItem("ccs_session");
   localStorage.removeItem("ccs_name");
   localStorage.removeItem("ccs_app");
+  sessionStorage.removeItem("ccs_session");
+  sessionStorage.removeItem("ccs_name");
   announceSessionChange();
+}
+
+/** End the server-side session (best effort), then the caller clears locally. */
+export async function logout(): Promise<void> {
+  try {
+    await api.post("/api/auth/logout");
+  } catch {
+    // token already invalid/expired — nothing to invalidate server-side
+  }
 }
 
 export function currentAppId(): number | null {
@@ -136,6 +155,33 @@ export function clearCurrentApp() {
   localStorage.removeItem("ccs_app");
 }
 
+// ------------------------------------------------------- password recovery
+
+export interface ForgotPasswordResponse {
+  message: string;
+  dev_reset_url?: string | null;
+  dev_notice?: string | null;
+}
+
+export async function requestPasswordReset(
+  cnic: string,
+): Promise<ForgotPasswordResponse> {
+  return api.post<ForgotPasswordResponse>("/api/auth/forgot-password", {
+    cnic,
+  });
+}
+
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+): Promise<{ message: string }> {
+  return api.post<{ message: string }>("/api/auth/reset-password", {
+    token,
+    new_password: newPassword,
+    confirm_password: newPassword,
+  });
+}
+
 // ----------------------------------------------------------------- API types
 
 export interface ApplicantPublic {
@@ -143,6 +189,8 @@ export interface ApplicantPublic {
   full_name: string;
   cnic_masked: string;
   mobile_masked: string;
+  email_masked: string;
+  cnic_status: string;
 }
 
 export interface ApplicationSummary {
@@ -158,6 +206,7 @@ export interface ApplicationSummary {
 export interface RegisterResponse {
   session_token: string;
   applicant: ApplicantPublic;
+  cnic_notice?: string | null;
 }
 
 export interface LoginResponse extends RegisterResponse {

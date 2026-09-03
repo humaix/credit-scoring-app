@@ -1,7 +1,8 @@
 """Session handling and identifier masking.
 
-Prototype auth: random session token issued at registration or login; no
-passwords. CNIC and mobile are masked everywhere they appear in responses.
+Session auth: random token issued at registration, re-issued at login after
+a logout, invalidated by logout. CNIC, mobile and email are masked everywhere
+they appear in responses. Passwords live in backend/security.py (bcrypt).
 """
 
 import secrets
@@ -34,12 +35,24 @@ def mask_mobile(mobile: str) -> str:
     return "*" * len(mobile)
 
 
+def mask_email(email: str | None) -> str:
+    # hina.raza@gmail.com -> h***@gmail.com
+    if not email:
+        return ""
+    local, _, domain = email.partition("@")
+    if not domain:
+        return "***"
+    return f"{local[:1]}***@{domain}"
+
+
 def applicant_public(applicant: Applicant) -> dict:
     return {
         "id": applicant.id,
         "full_name": applicant.full_name,
         "cnic_masked": mask_cnic(applicant.cnic),
         "mobile_masked": mask_mobile(applicant.mobile),
+        "email_masked": mask_email(applicant.email),
+        "cnic_status": applicant.cnic_status,
     }
 
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { clearSession, sessionToken } from "@/lib/api";
+import { clearSession, logout, sessionToken } from "@/lib/api";
 
 export default function Header() {
   const router = useRouter();
@@ -18,6 +18,13 @@ export default function Header() {
     window.addEventListener("ccs-session", sync);
     return () => window.removeEventListener("ccs-session", sync);
   }, [pathname]);
+
+  async function onLogout() {
+    // invalidate the token server-side first; local state goes either way
+    await logout();
+    clearSession();
+    router.push("/");
+  }
 
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
@@ -47,10 +54,7 @@ export default function Header() {
                 Dashboard
               </Link>
               <button
-                onClick={() => {
-                  clearSession();
-                  router.push("/");
-                }}
+                onClick={() => void onLogout()}
                 className="rounded-lg px-3 py-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
               >
                 Log out

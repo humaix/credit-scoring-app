@@ -4,6 +4,7 @@ import itertools
 
 from backend import config
 from backend.questionnaire import CONSISTENCY_PAIRS, QUESTIONS, score_questionnaire
+from backend.tests.flow import cnic_image_b64
 
 VALID_APPLICATION = {
     "age": 35,
@@ -23,7 +24,12 @@ def _unique_identity(cnic_prefix="42201"):
     return {
         "full_name": "Usman Tariq",
         "cnic": f"{cnic_prefix}-{n:07d}-3",
+        "email": f"usman{n}@example.com",
         "mobile": "03451234567",
+        "password": "Roshan123",
+        "confirm_password": "Roshan123",
+        "cnic_front_image": cnic_image_b64(),
+        "cnic_back_image": cnic_image_b64(),
     }
 
 

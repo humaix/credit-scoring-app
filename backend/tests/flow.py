@@ -1,12 +1,19 @@
 """Shared end-to-end flow helpers for the backend test suites.
 
-Registers a unique applicant, walks the product flow and returns auth headers
-plus the application id, so spec-section suites can focus on their assertions.
+Registers a unique applicant (with password + CNIC images, as Phase 1
+requires), walks the product flow and returns auth headers plus the
+application id, so spec-section suites can focus on their assertions.
 """
 
+import base64
+import io
 import itertools
 
+from PIL import Image
+
 from backend.questionnaire import QUESTIONS
+
+TEST_PASSWORD = "Roshan123"
 
 STRONG = {
     "age": 45, "occupation": "Business Owner", "monthly_income": 120000,
@@ -30,13 +37,26 @@ WEAK = {
 _identity_counter = itertools.count(9000)
 
 
-def unique_identity(cnic_prefix="35202"):
-    """A distinct but format-valid identity per call (tests share one DB)."""
+def cnic_image_b64(width=640, height=480, brightness=120) -> str:
+    """A base64 JPEG that passes the CNIC image quality checks."""
+    image = Image.new("RGB", (width, height), (brightness,) * 3)
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG")
+    return base64.b64encode(buffer.getvalue()).decode()
+
+
+def unique_identity(cnic_prefix="35202") -> dict:
+    """A complete, distinct registration payload per call (tests share one DB)."""
     n = next(_identity_counter)
     return {
         "full_name": "Hina Raza",
         "cnic": f"{cnic_prefix}-{n:07d}-7",
+        "email": f"hina{n}@example.com",
         "mobile": "03111234567",
+        "password": TEST_PASSWORD,
+        "confirm_password": TEST_PASSWORD,
+        "cnic_front_image": cnic_image_b64(),
+        "cnic_back_image": cnic_image_b64(),
     }
 
 

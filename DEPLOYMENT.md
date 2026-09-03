@@ -139,6 +139,15 @@ locally — optional; the fallback templates cover every failure mode.
 | `DATABASE_URL` | Render / local | no | SQLite file in repo root | switch to `postgresql+psycopg2://…` for a persistent database |
 | `OTP_TTL_SECONDS` | Render / local | no | `300` | simulated OTP expiry |
 | `OTP_MAX_ATTEMPTS` | Render / local | no | `5` | wrong-OTP attempts before lockout |
+| `APP_BASE_URL` | Render / local | no | `http://localhost:3000` | frontend origin used to build password-reset links |
+| `RESET_TOKEN_TTL_MINUTES` | Render / local | no | `30` | how long a password-reset link stays valid |
+| `DEV_SHOW_RESET_LINK` | Render / local | no | `true` | demo mode: with SMTP unset, the reset link is returned in the API response (clearly labelled) so the flow can be demoed without a mail server. **Never set together with SMTP credentials.** |
+| `SMTP_HOST` | Render / `.env` | no | empty | outgoing mail server for password-reset emails; empty disables sending |
+| `SMTP_PORT` | Render / `.env` | no | `587` | SMTP port (STARTTLS) |
+| `SMTP_USER` | Render / `.env` | no | empty | SMTP username |
+| `SMTP_PASSWORD` | Render / `.env` | no | empty | SMTP password / app password — secret, never commit |
+| `SMTP_FROM` | Render / `.env` | no | `SMTP_USER` | sender address shown on reset emails |
+| `UPLOADS_DIR` | Render / local | no | `uploads/` in repo root | where applicant CNIC images are stored (instance disk; see persistence note) |
 | `NEXT_PUBLIC_API_BASE_URL` | Vercel / local | yes in production | `http://localhost:8000` | backend base URL used by the frontend |
 
 ## Deployment safety notes
