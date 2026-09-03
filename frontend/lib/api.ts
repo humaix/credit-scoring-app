@@ -224,6 +224,7 @@ export interface ConsentPublic {
   telecom_activity: boolean;
   digital_transactions: boolean;
   previous_loan_info: boolean;
+  bank_account_data: boolean;
   granted_at: string;
 }
 
@@ -273,6 +274,12 @@ export interface ApplicationDetail {
   monthly_debt_payments: number;
   existing_loan_history: string;
   digital_purchase_frequency: number;
+  // Phase 2: bank-account declaration (raw IBAN never exposed — masked only)
+  has_bank_account: boolean;
+  bank_name: string | null;
+  bank_account_title: string | null;
+  bank_iban_masked: string | null;
+  wallet_provider: string | null;
   applicant: ApplicantPublic;
   verification: VerificationPublic | null;
   consent: ConsentPublic | null;
@@ -354,6 +361,9 @@ export const OCCUPATIONS = [
   "Daily Wage Worker",
   "Other",
 ];
+
+// Phase 2: applicant-declared mobile wallet (optional, both bank paths)
+export const WALLET_PROVIDERS = ["JazzCash", "Easypaisa", "Other"];
 
 export const LOAN_HISTORY_OPTIONS = [
   "No Previous Loan",

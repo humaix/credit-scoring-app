@@ -3,6 +3,11 @@
 The scoring pipeline never silently claims access to external data: each
 category is explicitly consented to, stored with the application, and the
 mock provider fetches (phase 4) are gated on it.
+
+Phase 2 makes the category set conditional: applicants who declared a bank
+account are also asked for bank account / bank statement data consent, and
+that category is never shown as required to applicants without one —
+financial inclusion means no bank account never blocks assessment.
 """
 
 from sqlalchemy.orm import Session
@@ -16,6 +21,9 @@ CONSENT_CATEGORIES = (
     "digital_transactions", "previous_loan_info",
 )
 
+# only applicable (and only required) for applications with a bank account
+BANK_CATEGORY = "bank_account_data"
+
 CONSENT_DESCRIPTIONS = {
     "wallet_activity": (
         "Mobile wallet activity summary from your wallet provider "
@@ -25,17 +33,37 @@ CONSENT_DESCRIPTIONS = {
         "(simulated for this prototype)"),
     "digital_transactions": "Digital purchase frequency information",
     "previous_loan_info": "Previous loan and repayment history",
+    "bank_account_data": (
+        "Bank account and bank statement data (document-based prototype "
+        "verification — no bank or open-banking integration in this prototype)"),
 }
 
+# generic wording: the concrete category count depends on the application
 CONSENT_NOTICE = (
-    "Assessment requires consent to all four data categories. If consent is "
-    "declined, that data cannot be used and no score can be produced for "
-    "this application."
+    "Assessment requires consent to all applicable data categories. If "
+    "consent is declined, that data cannot be used and no score can be "
+    "produced for this application."
 )
 
 
+def applicable_categories(has_bank_account: bool) -> tuple:
+    """The categories an application must consent to, given its declaration."""
+    if has_bank_account:
+        return CONSENT_CATEGORIES + (BANK_CATEGORY,)
+    return CONSENT_CATEGORIES
+
+
+def consent_notice(has_bank_account: bool) -> str:
+    count = "five" if has_bank_account else "four"
+    return (
+        f"Assessment requires consent to all {count} applicable data "
+        "categories. If consent is declined, that data cannot be used and no "
+        "score can be produced for this application."
+    )
+
+
 def grant_consent(db: Session, application: Application, choices: dict) -> dict:
-    """Record consent for the four categories and advance the application."""
+    """Record consent for the applicable categories and advance the application."""
     existing = (
         db.query(ConsentRecord)
         .filter(ConsentRecord.application_id == application.id)
@@ -50,12 +78,13 @@ def grant_consent(db: Session, application: Application, choices: dict) -> dict:
             409, "invalid_state",
             f"Application is '{application.status}'; expected step order: {STEP_ORDER}")
 
-    declined = [c for c in CONSENT_CATEGORIES if not choices.get(c)]
+    required = applicable_categories(application.has_bank_account)
+    declined = [c for c in required if not choices.get(c)]
     if declined:
         raise ApiError(
             422, "consent_required",
-            f"Assessment requires consent to all data categories; declined: "
-            f"{', '.join(declined)}. {CONSENT_NOTICE}")
+            f"Assessment requires consent to all applicable data categories; "
+            f"declined: {', '.join(declined)}. {CONSENT_NOTICE}")
 
     record = ConsentRecord(
         application_id=application.id,
@@ -63,13 +92,16 @@ def grant_consent(db: Session, application: Application, choices: dict) -> dict:
         telecom_activity=True,
         digital_transactions=True,
         previous_loan_info=True,
+        # bank data consent exists only for bank-account holders; for the
+        # alternative-data path the category is not applicable at all
+        bank_account_data=bool(application.has_bank_account),
     )
     db.add(record)
     application.status = "consented"
     db.commit()
     return {
         "status": "consented",
-        "categories": list(CONSENT_CATEGORIES),
+        "categories": list(required),
         "granted_at": record.granted_at,
-        "notice": CONSENT_NOTICE,
+        "notice": consent_notice(application.has_bank_account),
     }

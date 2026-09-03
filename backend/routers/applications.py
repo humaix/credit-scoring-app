@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from ..auth import applicant_public, get_current_applicant, get_owned_application
+from ..auth import (
+    applicant_public, get_current_applicant, get_owned_application, mask_iban,
+)
 from ..db import get_db
 from ..errors import ApiError
 from ..models import Applicant, Application
@@ -40,6 +42,12 @@ def _detail(application: Application) -> dict:
         "monthly_debt_payments": application.monthly_debt_payments,
         "existing_loan_history": application.existing_loan_history,
         "digital_purchase_frequency": application.digital_purchase_frequency,
+        # bank declaration — the raw IBAN/account number never leaves the API
+        "has_bank_account": application.has_bank_account,
+        "bank_name": application.bank_name,
+        "bank_account_title": application.bank_account_title,
+        "bank_iban_masked": mask_iban(application.bank_iban) or None,
+        "wallet_provider": application.wallet_provider,
         "applicant": applicant_public(application.applicant),
         "verification": None,
         "consent": None,
@@ -58,6 +66,7 @@ def _detail(application: Application) -> dict:
             "telecom_activity": application.consent.telecom_activity,
             "digital_transactions": application.consent.digital_transactions,
             "previous_loan_info": application.consent.previous_loan_info,
+            "bank_account_data": application.consent.bank_account_data,
             "granted_at": application.consent.granted_at,
         }
     if application.questionnaire is not None:
@@ -99,6 +108,13 @@ def create_application(
         existing_loan_history=payload.existing_loan_history,
         requested_loan_size=payload.requested_loan_size,
         digital_purchase_frequency=payload.digital_purchase_frequency,
+        # Phase 2: the bank-account answer steers the rest of the flow
+        # (bank details exist only for account holders; consent adapts)
+        has_bank_account=payload.has_bank_account,
+        bank_name=payload.bank_name,
+        bank_account_title=payload.bank_account_title,
+        bank_iban=payload.bank_iban,
+        wallet_provider=payload.wallet_provider,
         status="created",
     )
     db.add(application)

@@ -163,6 +163,7 @@ def test_login_returns_applications(client):
             "monthly_debt_payments": 18000,
             "existing_loan_history": "No Previous Loan",
             "requested_loan_size": 400000, "digital_purchase_frequency": 6,
+            "has_bank_account": False,
         }, headers=headers).json()["application_id"]
 
     response = client.post("/api/auth/login", json={

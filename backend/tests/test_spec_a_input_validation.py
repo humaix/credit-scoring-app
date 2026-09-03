@@ -66,7 +66,7 @@ def test_register_missing_fields(client, missing):
 @pytest.mark.parametrize("missing", [
     "age", "occupation", "monthly_income", "monthly_debt_payments",
     "existing_loan_history", "requested_loan_size",
-    "digital_purchase_frequency",
+    "digital_purchase_frequency", "has_bank_account",
 ])
 def test_application_missing_fields(client, missing):
     headers = _register(client)

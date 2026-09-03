@@ -14,6 +14,7 @@ VALID_APPLICATION = {
     "existing_loan_history": "No Previous Loan",
     "requested_loan_size": 400000,
     "digital_purchase_frequency": 6,
+    "has_bank_account": False,
 }
 
 _identity_counter = itertools.count(5000)
@@ -396,7 +397,10 @@ def test_consent_info_endpoint(client):
     response = client.get("/api/consent/info")
     assert response.status_code == 200
     body = response.json()
+    # four always-applicable categories + the bank category (Phase 2: only
+    # required for applications that declared a bank account)
     assert set(body["categories"]) == {
         "wallet_activity", "telecom_activity",
-        "digital_transactions", "previous_loan_info"}
+        "digital_transactions", "previous_loan_info",
+        "bank_account_data"}
     assert "cannot be used" in body["notice"]

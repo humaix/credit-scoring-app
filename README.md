@@ -164,11 +164,11 @@ skipped, repeated or done out of order.
 
 ```mermaid
 flowchart TD
-    A["Register / login<br/>(name + CNIC + mobile)"] --> B["New application<br/>age · occupation · income ·<br/>debt payments · loan history · loan size · purchases"]
+    A["Register / login<br/>(name + CNIC + email + mobile<br/>+ password + CNIC images)"] --> B["New application<br/>bank-account question →<br/>bank details when YES ·<br/>age · occupation · income ·<br/>debt payments · loan history · loan size · purchases"]
     B --> C["Identity verification<br/>simulated OTP (6 digits, 5 attempts, 5-min TTL)"]
     C -- "registry miss<br/>(CNIC starts 00000)" --> F1["Status: failed —<br/>flow cannot continue"]
-    C -- verified --> D["Consent<br/>4 alternative-data categories,<br/>all required"]
-    D -- declined --> F2["409: no score can be<br/>produced without consent"]
+    C -- verified --> D["Consent<br/>4 alternative-data categories<br/>+ bank data when the applicant<br/>declared a bank account"]
+    D -- declined --> F2["422: no score can be<br/>produced without consent"]
     D -- granted --> E["Financial Behavior Assessment<br/>12 Likert questions → psychometric score"]
     E --> S["Scoring: features → XGBoost → SHAP → LLM → PDF"]
     S --> R["Results: score · category · top factors<br/>contribution chart · explanation · disclaimer"]
@@ -294,16 +294,19 @@ validation, and a sanitized catch-all 500 that never leaks internals).
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/health` | service health (used by Render) |
-| POST | `/api/auth/register` | register with name + CNIC + mobile → session token |
-| POST | `/api/auth/login` | CNIC + mobile → session token |
-| POST | `/api/applications` | new application (Layer 1–4 validation) |
+| POST | `/api/auth/register` | register with name + CNIC + email + mobile + password + CNIC front/back images → session token |
+| POST | `/api/auth/login` | CNIC + password → session token |
+| POST | `/api/auth/logout` | invalidate the session token |
+| POST | `/api/auth/forgot-password` | request a reset link (generic response; SMTP or dev mode) |
+| POST | `/api/auth/reset-password` | set a new password with a single-use expiring token |
+| POST | `/api/applications` | new application — bank-account question first; bank details required when YES, rejected when NO (Layer 1–4 validation) |
 | GET | `/api/applications` | applicant's applications (history) |
-| GET | `/api/applications/{id}` | application detail (404 if not owned) |
+| GET | `/api/applications/{id}` | application detail incl. bank declaration (IBAN always masked; 404 if not owned) |
 | GET | `/api/applications/{id}/report` | stream the applicant's PDF |
 | POST | `/api/verification/request-otp` | simulated OTP (clearly labelled; returned in response in demo mode) |
 | POST | `/api/verification/verify-otp` | verify OTP + simulated registry check |
-| GET | `/api/consent/info` | consent categories + descriptions |
-| POST | `/api/consent` | record consent (all four categories required) |
+| GET | `/api/consent/info` | consent categories + descriptions (bank category included) |
+| POST | `/api/consent` | record consent — four categories always, plus bank data when the applicant declared a bank account |
 | GET | `/api/assessment/questions` | the 12 questions (reversed flags stay internal) |
 | POST | `/api/assessment/psychometric` | submit answers → psychometric score + warnings |
 | POST | `/api/scoring/predict` | score, explain and persist (returns contributors, explanation, disclaimer) |
@@ -416,8 +419,11 @@ The canonical, always-current table lives in
 
 Run locally (`uvicorn` + `npm run dev`) or on the deployed URLs, then:
 
-1. **Register** a demo applicant (name, CNIC `35202-1234567-1`, mobile
-   `03001234567`) and create a new application. Try an invalid CNIC or a
+1. **Register** a demo applicant (name, CNIC `35202-1234567-1`, email,
+   mobile, password, and camera capture of the CNIC front/back) and create a
+   new application — answering **"Do you have a bank account?"** first.
+   Answer **YES** with bank details (bank data consent then appears) or
+   **NO** (no bank fields, alternative-data path). Try an invalid CNIC or a
    negative income first — the layered validation responds with a precise,
    field-level error.
 2. **Verify identity** — request the OTP; in demo mode the simulated code is
@@ -425,8 +431,10 @@ Run locally (`uvicorn` + `npm run dev`) or on the deployed URLs, then:
    twice to show the attempt countdown, then correctly to proceed.
    *(Bonus path: a CNIC starting `00000` simulates a registry miss — the
    verification fails and the flow correctly refuses to continue.)*
-3. **Grant consent** — four alternative-data categories; try declining to
-   show that scoring is impossible without consent.
+3. **Grant consent** — four alternative-data categories (plus bank data
+   when you declared a bank account); try declining to show that scoring is
+   impossible without consent. An applicant with **no bank account** is
+   never asked for bank-data consent and still completes the assessment.
 4. **Take the assessment** — answer the 12 questions; answer a related pair
    in opposite directions to trigger a consistency *warning* (shown, never
    enforced).

@@ -169,6 +169,7 @@ def test_cross_field_warnings_never_block_scoring(client, offline_explanations):
         "existing_loan_history": "Good Repayment History",
         "requested_loan_size": 500000,  # 25x income -> warning
         "digital_purchase_frequency": 4,
+        "has_bank_account": False,
     }
     headers, application_id = _full_flow(client, inconsistent, likert_answers("mid"))
     result = _score(client, headers, application_id)

@@ -38,7 +38,10 @@ def test_public_endpoints_succeed(client):
     assert "reversed" not in questions["questions"][0]
 
     info = client.get("/api/consent/info").json()
-    assert len(info["categories"]) == 4
+    # four always-applicable categories + the bank category (only required
+    # for applications that declared a bank account — Phase 2)
+    assert len(info["categories"]) == 5
+    assert "prototype" in info["categories"]["bank_account_data"].lower()
     assert "simulated" in str(info).lower()  # mock integrations labelled
 
 

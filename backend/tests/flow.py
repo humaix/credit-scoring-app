@@ -20,18 +20,31 @@ STRONG = {
     "monthly_debt_payments": 14400,
     "existing_loan_history": "Good Repayment History",
     "requested_loan_size": 300000, "digital_purchase_frequency": 8,
+    "has_bank_account": False,
 }
 MODERATE = {
     "age": 38, "occupation": "Self-Employed", "monthly_income": 65000,
     "monthly_debt_payments": 19500,
     "existing_loan_history": "No Previous Loan",
     "requested_loan_size": 500000, "digital_purchase_frequency": 5,
+    "has_bank_account": False,
 }
 WEAK = {
     "age": 26, "occupation": "Daily Wage Worker", "monthly_income": 28000,
     "monthly_debt_payments": 15400,
     "existing_loan_history": "Previous Default",
     "requested_loan_size": 350000, "digital_purchase_frequency": 2,
+    "has_bank_account": False,
+}
+
+# Phase 2: a complete bank-account-holder declaration (YES path)
+WITH_BANK = {
+    **MODERATE,
+    "has_bank_account": True,
+    "bank_name": "Habib Bank Limited",
+    "bank_account_title": "Hina Raza",
+    "bank_iban": "PK36SCBL0000001123456702",
+    "wallet_provider": "JazzCash",
 }
 
 _identity_counter = itertools.count(9000)

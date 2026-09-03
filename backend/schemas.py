@@ -17,6 +17,10 @@ CNIC_PATTERN = re.compile(r"^\d{5}-\d{7}-\d{1}$")
 MOBILE_PATTERN = re.compile(r"^03\d{9}$")
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+# Phase 5 will build the wallet-activity score service around these providers;
+# declared here so validation stays in one place
+WALLET_PROVIDERS = ("JazzCash", "Easypaisa", "Other")
+
 
 def _within_model_range(key: str, value: float) -> float:
     low, high, _ = NUMERIC_RANGES[key]
@@ -138,6 +142,19 @@ class ApplicationCreate(BaseModel):
     requested_loan_size: float
     digital_purchase_frequency: int
 
+    # ---- Phase 2: bank-account question (asked before the financial data) --
+    has_bank_account: bool
+    # required when has_bank_account is true; rejected otherwise. The IBAN /
+    # account number accepts a Pakistani IBAN (PK.. 26 chars) or a plain
+    # account number, is normalized (spaces stripped, upper-cased) and is
+    # always returned masked.
+    bank_name: str | None = Field(default=None, max_length=100)
+    bank_account_title: str | None = Field(default=None, max_length=100)
+    bank_iban: str | None = Field(default=None, max_length=34)
+    # optional applicant-declared wallet, available on both paths (the
+    # alternative-data path is wallet-first; Phase 5 builds on this)
+    wallet_provider: str | None = Field(default=None, max_length=30)
+
     @field_validator("occupation")
     @classmethod
     def _valid_occupation(cls, value: str) -> str:
@@ -157,6 +174,61 @@ class ApplicationCreate(BaseModel):
     @classmethod
     def _within_range(cls, value: float, info) -> float:
         return _within_model_range(_API_TO_MODEL_FIELD[info.field_name], value)
+
+    @field_validator("bank_name", "bank_account_title")
+    @classmethod
+    def _clean_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    @field_validator("bank_iban")
+    @classmethod
+    def _valid_iban(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.replace(" ", "").strip().upper()
+        if not normalized:
+            return None
+        # a Pakistani IBAN is 24 characters: PK + 2 check digits + 20 more
+        is_iban = re.fullmatch(r"PK\d{2}[A-Z0-9]{20}", normalized)
+        is_account_number = re.fullmatch(r"[A-Z0-9]{8,24}", normalized)
+        if not (is_iban or is_account_number):
+            raise ValueError(
+                "bank_iban must be a Pakistani IBAN (PK + 24 characters) or "
+                "an account number of 8-24 letters/digits")
+        return normalized
+
+    @field_validator("wallet_provider")
+    @classmethod
+    def _valid_wallet(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        value = value.strip()
+        if value not in WALLET_PROVIDERS:
+            raise ValueError(f"wallet_provider must be one of {WALLET_PROVIDERS}")
+        return value
+
+    @model_validator(mode="after")
+    def _bank_fields_match_declaration(self):
+        if self.has_bank_account:
+            missing = [
+                name for name, value in (
+                    ("bank_name", self.bank_name),
+                    ("bank_account_title", self.bank_account_title),
+                    ("bank_iban", self.bank_iban),
+                ) if not value
+            ]
+            if missing:
+                raise ValueError(
+                    f"bank details required when has_bank_account is true; "
+                    f"missing: {', '.join(missing)}")
+        elif self.bank_name or self.bank_account_title or self.bank_iban:
+            raise ValueError(
+                "bank details can only be provided when has_bank_account "
+                "is true")
+        return self
 
     @model_validator(mode="after")
     def _dti_feasible(self):
@@ -180,11 +252,13 @@ class OtpVerifyRequest(ApplicationRef):
 
 class ConsentGrantRequest(ApplicationRef):
     # a missing category counts as declined; the service names the
-    # declined categories in the error message
+    # declined categories in the error message. bank_account_data is only
+    # required when the application declared a bank account (Phase 2)
     wallet_activity: bool = False
     telecom_activity: bool = False
     digital_transactions: bool = False
     previous_loan_info: bool = False
+    bank_account_data: bool = False
 
 
 class QuestionnaireSubmit(ApplicationRef):
@@ -243,6 +317,9 @@ class ConsentPublic(BaseModel):
     telecom_activity: bool
     digital_transactions: bool
     previous_loan_info: bool
+    # Phase 2: true only for applications that declared a bank account and
+    # consented to sharing bank/statement data
+    bank_account_data: bool = False
     granted_at: datetime
 
 
@@ -302,6 +379,13 @@ class ApplicationDetail(ApplicationSummary):
     monthly_debt_payments: float
     existing_loan_history: str
     digital_purchase_frequency: int
+    # ---- Phase 2: bank-account declaration -------------------------------
+    # raw IBAN/account number is never exposed — only the masked form
+    has_bank_account: bool = False
+    bank_name: str | None = None
+    bank_account_title: str | None = None
+    bank_iban_masked: str | None = None
+    wallet_provider: str | None = None
     applicant: ApplicantPublic
     verification: VerificationPublic | None = None
     consent: ConsentPublic | None = None

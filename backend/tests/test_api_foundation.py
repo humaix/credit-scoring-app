@@ -12,6 +12,7 @@ VALID_APPLICATION = {
     "existing_loan_history": "No Previous Loan",
     "requested_loan_size": 400000,
     "digital_purchase_frequency": 6,
+    "has_bank_account": False,
 }
 
 _identity_counter = itertools.count(1)

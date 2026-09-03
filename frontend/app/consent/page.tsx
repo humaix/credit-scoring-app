@@ -9,12 +9,19 @@ import {
   useCurrentApplication,
 } from "@/components/ui";
 
-const CATEGORY_ORDER = [
+// bank_data is only shown (and only required) for applications that
+// declared a bank account — Phase 2 conditional consent
+const BASE_CATEGORIES = [
   { key: "wallet_activity", title: "Mobile wallet activity" },
   { key: "telecom_activity", title: "Telecom activity" },
   { key: "digital_transactions", title: "Digital transactions" },
   { key: "previous_loan_info", title: "Previous loan information" },
 ] as const;
+
+const BANK_CATEGORY = {
+  key: "bank_account_data",
+  title: "Bank account & statement data",
+} as const;
 
 type Choices = Record<string, boolean>;
 
@@ -29,6 +36,7 @@ export default function ConsentPage() {
     telecom_activity: true,
     digital_transactions: true,
     previous_loan_info: true,
+    bank_account_data: true,
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<unknown>(null);
@@ -58,7 +66,12 @@ export default function ConsentPage() {
   }
   if (!app) return null;
 
-  const allSelected = CATEGORY_ORDER.every(({ key }) => choices[key]);
+  const hasBank = app.has_bank_account;
+  const categories = hasBank
+    ? [...BASE_CATEGORIES, BANK_CATEGORY]
+    : [...BASE_CATEGORIES];
+  const count = hasBank ? "five" : "four";
+  const allSelected = categories.every(({ key }) => choices[key]);
 
   function toggle(key: string) {
     setChoices((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -93,7 +106,7 @@ export default function ConsentPage() {
         </p>
 
         <div className="mt-5 space-y-3">
-          {CATEGORY_ORDER.map(({ key, title }) => (
+          {categories.map(({ key, title }) => (
             <label
               key={key}
               className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${
@@ -134,8 +147,8 @@ export default function ConsentPage() {
           <div className="mt-3">
             <Alert tone="info">
               You have declined one or more categories. Assessment requires
-              consent to all four — if you continue like this, no score can be
-              produced for this application.
+              consent to all {count} applicable categories — if you continue
+              like this, no score can be produced for this application.
             </Alert>
           </div>
         )}
@@ -150,7 +163,9 @@ export default function ConsentPage() {
           disabled={!allSelected}
           onClick={grantConsent}
         >
-          {allSelected ? "Grant consent and continue" : "Grant all categories to continue"}
+          {allSelected
+            ? "Grant consent and continue"
+            : `Grant all ${count} categories to continue`}
         </PrimaryButton>
       </Card>
     </div>

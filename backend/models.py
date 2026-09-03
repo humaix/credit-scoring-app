@@ -7,7 +7,7 @@ never sent to the ML model.
 
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -83,6 +83,18 @@ class Application(Base):
     requested_loan_size: Mapped[float] = mapped_column(Float)
     digital_purchase_frequency: Mapped[int] = mapped_column(Integer)
 
+    # ---- Phase 2 bank-account question -------------------------------------
+    # asked before the financial data; the answer steers the rest of the flow
+    # (bank details + bank-data consent only exist for account holders)
+    has_bank_account: Mapped[bool] = mapped_column(Boolean, default=False)
+    # populated only when has_bank_account is true; IBAN/account number is
+    # stored normalized and always returned masked (see auth.mask_iban)
+    bank_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    bank_account_title: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    bank_iban: Mapped[str | None] = mapped_column(String(34), nullable=True)
+    # optional applicant-declared wallet (JazzCash / Easypaisa / Other)
+    wallet_provider: Mapped[str | None] = mapped_column(String(30), nullable=True)
+
     # created -> verified -> consented -> assessed -> scored
     status: Mapped[str] = mapped_column(String(20), default="created", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
@@ -131,6 +143,9 @@ class ConsentRecord(Base):
     telecom_activity: Mapped[bool] = mapped_column(default=False)
     digital_transactions: Mapped[bool] = mapped_column(default=False)
     previous_loan_info: Mapped[bool] = mapped_column(default=False)
+    # Phase 2: only meaningful (and only required) when the application
+    # declared a bank account; False for alternative-data-only applications
+    bank_account_data: Mapped[bool] = mapped_column(default=False)
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     application: Mapped["Application"] = relationship(back_populates="consent")

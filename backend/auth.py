@@ -45,6 +45,16 @@ def mask_email(email: str | None) -> str:
     return f"{local[:1]}***@{domain}"
 
 
+def mask_iban(value: str | None) -> str:
+    # PK36SCBL0000001123456702 -> PK36**************6702
+    # plain account numbers get the same head/tail treatment
+    if not value:
+        return ""
+    if len(value) >= 12:
+        return value[:4] + "*" * (len(value) - 8) + value[-4:]
+    return "*" * max(len(value) - 3, 1) + value[-3:]
+
+
 def applicant_public(applicant: Applicant) -> dict:
     return {
         "id": applicant.id,
