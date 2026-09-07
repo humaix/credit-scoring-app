@@ -32,9 +32,9 @@ def test_valid_boundary_values_accepted(client):
     boundaries = [
         {**MODERATE, "age": 18, "monthly_income": 1000,
          "monthly_debt_payments": 0,  # must stay <= the boundary income
-         "requested_loan_size": 10000, "digital_purchase_frequency": 0},
+         "requested_loan_size": 50000, "digital_purchase_frequency": 0},
         {**MODERATE, "age": 65, "monthly_income": 5000000,
-         "requested_loan_size": 10000000, "digital_purchase_frequency": 200},
+         "requested_loan_size": 1200000, "digital_purchase_frequency": 200},
     ]
     for payload in boundaries:
         response = client.post("/api/applications", json=payload,
@@ -67,8 +67,7 @@ def test_register_missing_fields(client, missing):
 
 @pytest.mark.parametrize("missing", [
     "age", "occupation", "monthly_income", "monthly_debt_payments",
-    "existing_loan_history", "requested_loan_size",
-    "digital_purchase_frequency", "has_bank_account",
+    "requested_loan_size", "digital_purchase_frequency", "has_bank_account",
 ])
 def test_application_missing_fields(client, missing):
     headers = _register(client)
@@ -84,7 +83,7 @@ def test_application_missing_fields(client, missing):
 @pytest.mark.parametrize("field,bad_value", [
     ("age", 17), ("age", 66), ("age", "thirty-five"),
     ("monthly_income", 999), ("monthly_income", 5000001),
-    ("requested_loan_size", 9999), ("requested_loan_size", 10000001),
+    ("requested_loan_size", 49999), ("requested_loan_size", 1200001),
     ("digital_purchase_frequency", -1), ("digital_purchase_frequency", 201),
     ("digital_purchase_frequency", 2.5),
 ])

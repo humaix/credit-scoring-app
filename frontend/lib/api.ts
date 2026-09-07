@@ -272,6 +272,58 @@ export interface Explanation {
   source: string;
 }
 
+export interface FeatureInterpretation {
+  label: string;
+  value: string;
+  band: string | null;
+  meaning: string;
+  reference_note: string | null;
+  how_calculated: string | null;
+  simulation_note?: string | null;
+  formula?: string | null;
+  components?: {
+    name: string;
+    weight: string;
+    description: string;
+    score: number;
+  }[];
+}
+
+export interface ContributorBlock {
+  feature: string;
+  value: string;
+  influence: string;
+  meaning?: string;
+  reference_note?: string | null;
+}
+
+export interface CreditHistoryExplanation {
+  rows: { label: string; value: string }[];
+  narrative: string;
+  demo_notice: string;
+}
+
+export interface CreditHistoryInterpretation {
+  provider: string;
+  demo_notice: string;
+  credit_data: Record<string, any>;
+  derived_loan_history: string;
+  inconsistent: boolean;
+  explanation: CreditHistoryExplanation;
+  created_at?: string;
+}
+
+export interface InterpretationData {
+  application_info: FeatureInterpretation[];
+  credit_history: CreditHistoryInterpretation | null;
+  financial_indicators: FeatureInterpretation[];
+  digital_indicators: FeatureInterpretation[];
+  top_supported: ContributorBlock[];
+  top_reduced: ContributorBlock[];
+  score_pipeline: { name: string; description: string }[];
+  pipeline_note: string;
+}
+
 export interface AssessmentDetailPublic {
   repayment_score: number;
   raw_score: number;
@@ -282,6 +334,7 @@ export interface AssessmentDetailPublic {
   negative_contributors: Contributor[];
   all_contributions: Contributor[];
   explanation: Explanation;
+  interpretation?: InterpretationData | null;
   created_at: string;
 }
 

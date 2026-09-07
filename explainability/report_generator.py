@@ -1,23 +1,30 @@
-"""ReportLab rendering of the Applicant Repayment Assessment PDF."""
+"""ReportLab rendering of the Applicant Repayment Assessment PDF.
 
-import io
-import textwrap
+Applicant-facing structure (spec section 18): Your Repayment Score, Your
+Application Information, Credit History Verification, Your Financial
+Indicators, Your Digital & Behavioral Indicators, What Supported Your Score,
+What Reduced Your Score, How the Final Score Was Generated.
+
+All interpretation content comes from the shared interpretation utilities
+(build_interpretation_blocks) — the same blocks the dashboard shows, so the
+PDF and the UI can never disagree. Raw model internals (contribution values)
+are never printed: applicants see values, meanings and direction statements.
+"""
+
 from datetime import datetime
 from xml.sax.saxutils import escape
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 from reportlab.graphics.shapes import Drawing, Rect, String
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
-    HRFlowable, Image, KeepTogether, Paragraph, SimpleDocTemplate, Spacer,
-    Table, TableStyle,
+    HRFlowable, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table,
+    TableStyle,
 )
+
+from interpretation import build_interpretation_blocks
 
 CATEGORY_COLORS = {
     "Very Low": colors.HexColor("#b71c1c"),
@@ -57,9 +64,8 @@ _H3 = ParagraphStyle("H3", fontName="Helvetica-Bold", fontSize=10,
                      textColor=colors.HexColor("#374151"), spaceBefore=8, spaceAfter=3)
 _BODY = ParagraphStyle("Body", fontName="Helvetica", fontSize=9.5,
                        leading=13.5, textColor=colors.HexColor("#111827"))
-_BULLET = ParagraphStyle("Bullet", fontName="Helvetica", fontSize=9.5, leading=13.5,
-                         textColor=colors.HexColor("#111827"),
-                         leftIndent=14, bulletIndent=4, spaceAfter=2)
+_VALUE = ParagraphStyle("Value", fontName="Helvetica-Bold", fontSize=10,
+                        leading=13, textColor=colors.HexColor("#111827"))
 _SCORE = ParagraphStyle("Score", fontName="Helvetica-Bold", fontSize=24, leading=27)
 _CATEGORY = ParagraphStyle("Category", fontName="Helvetica-Bold", fontSize=13,
                            leading=16, textColor=GRAY)
@@ -71,6 +77,17 @@ _TABLE_LABEL = ParagraphStyle("TableLabel", fontName="Helvetica", fontSize=8.5,
                               textColor=GRAY)
 _TABLE_VALUE = ParagraphStyle("TableValue", fontName="Helvetica-Bold", fontSize=9.5,
                               textColor=colors.HexColor("#111827"))
+_TABLE_SMALL = ParagraphStyle("TableSmall", fontName="Helvetica", fontSize=8,
+                              leading=10, textColor=colors.HexColor("#111827"))
+
+_ROW_STYLE = TableStyle([
+    ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, LIGHT_ROW]),
+    ("LINEBELOW", (0, 0), (-1, -1), 0.5, BORDER),
+    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ("TOPPADDING", (0, 0), (-1, -1), 5),
+    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+])
 
 
 def unique_report_path(reports_dir):
@@ -100,66 +117,6 @@ def _score_gauge(score, category):
     return gauge
 
 
-def _contribution_chart(assessment):
-    """Horizontal bar chart of the strongest actual contributions."""
-    ranked = assessment["all_contributions"]  # sorted, most positive first
-    positives = [c for c in ranked if c["shap_value"] > 0][:3]
-    negatives = [c for c in reversed(ranked) if c["shap_value"] < 0][:3]
-    bars = sorted(positives + negatives, key=lambda c: c["shap_value"])
-
-    labels = [textwrap.fill(f"{c['feature']} ({c['value']})", 38) for c in bars]
-    values = [c["shap_value"] for c in bars]
-
-    fig, ax = plt.subplots(figsize=(7.4, 0.62 * len(bars) + 1.0))
-    bar_colors = ["#2e7d32" if v > 0 else "#c62828" for v in values]
-    ax.barh(range(len(bars)), values, color=bar_colors, height=0.62)
-    ax.set_yticks(range(len(bars)), labels, fontsize=9)
-    ax.axvline(0, color="#374151", lw=0.9)
-
-    limit = max(abs(v) for v in values) * 1.28
-    ax.set_xlim(-limit, limit)
-    for i, v in enumerate(values):
-        ax.text(v + (0.06 * limit if v >= 0 else -0.06 * limit), i,
-                f"{v:+.1f}", va="center",
-                ha="left" if v >= 0 else "right", fontsize=9, color="#111827")
-    ax.set_xlabel("Contribution to the model's repayment score (points)", fontsize=9)
-    ax.tick_params(axis="x", labelsize=8)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    ax.grid(axis="x", alpha=0.25)
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=200, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return buf
-
-
-def _applicant_table(assessment):
-    features = assessment["applicant_features"]
-    rows = []
-    for i in range(0, len(features), 2):
-        left = features[i]
-        right = features[i + 1] if i + 1 < len(features) else None
-        rows.append([
-            Paragraph(left["feature"], _TABLE_LABEL),
-            Paragraph(left["value"], _TABLE_VALUE),
-            Paragraph(right["feature"] if right else "", _TABLE_LABEL),
-            Paragraph(right["value"] if right else "", _TABLE_VALUE),
-        ])
-
-    table = Table(rows, colWidths=[129, 114.5, 129, 114.5])
-    table.setStyle(TableStyle([
-        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, LIGHT_ROW]),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.5, BORDER),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-    ]))
-    return table
-
-
 def _score_section(assessment):
     score = assessment["repayment_score"]
     category = assessment["score_category"]
@@ -181,61 +138,177 @@ def _score_section(assessment):
         Spacer(1, 4),
         _score_gauge(score, category),
         Spacer(1, 10),
-        Paragraph(NEUTRAL_SCORE_NOTE, _SMALL),
+        Paragraph(escape(assessment.get("_summary") or NEUTRAL_SCORE_NOTE), _SMALL),
     ]
 
 
-def _factors_section(assessment, explanation):
+def _info_table(blocks):
+    """Label/value pairs in two columns — the applicant's own information."""
+    rows = []
+    for i in range(0, len(blocks), 2):
+        left = blocks[i]
+        right = blocks[i + 1] if i + 1 < len(blocks) else None
+        rows.append([
+            Paragraph(left["label"], _TABLE_LABEL),
+            Paragraph(left["value"], _TABLE_VALUE),
+            Paragraph(right["label"] if right else "", _TABLE_LABEL),
+            Paragraph(right["value"] if right else "", _TABLE_VALUE),
+        ])
+    table = Table(rows, colWidths=[129, 114.5, 129, 114.5])
+    table.setStyle(_ROW_STYLE)
+    return table
+
+
+def _value_line(block):
+    value = block["value"]
+    if block.get("band"):
+        return Paragraph(escape(f"{value} \u2014 {block['band']}"), _VALUE)
+    return Paragraph(escape(value), _VALUE)
+
+
+def _credit_section(interp, assessment):
     story = []
-    positives = explanation["positive_factors"]
-    negatives = explanation["negative_factors"]
-
-    story.append(Paragraph("Positive Factors", _H3))
-    if positives:
-        # LLM wording is free text: escape it so ReportLab's markup parser
-        # can never choke on tag-like sequences (e.g. "income <br> stable")
-        story.extend(
-            Paragraph(escape(f), _BULLET, bulletText="\u2022") for f in positives)
+    credit = interp.get("credit_history")
+    if credit:
+        story.append(Paragraph(
+            escape(f"Verified result: {credit['derived_loan_history']}"), _VALUE))
+        story.append(Paragraph("How this was determined:", _SMALL))
+        rows = [[Paragraph("Indicator", _TABLE_LABEL),
+                 Paragraph("Value", _TABLE_LABEL)]]
+        rows.extend(
+            [Paragraph(escape(row["label"]), _TABLE_SMALL),
+             Paragraph(escape(row["value"]), _TABLE_SMALL)]
+            for row in credit["explanation"]["rows"]
+        )
+        table = Table(rows, colWidths=[200, 287])
+        table.setStyle(_ROW_STYLE)
+        story.append(table)
+        story.append(Spacer(1, 5))
+        story.append(Paragraph(escape(credit["explanation"]["narrative"]), _BODY))
+        if credit.get("inconsistent"):
+            story.append(Paragraph(
+                "Note: some credit-information indicators in this record are "
+                "contradictory; please review them with your loan officer.",
+                _SMALL_ITALIC))
+        story.append(Spacer(1, 3))
+        story.append(Paragraph(escape(credit["demo_notice"]), _SMALL_ITALIC))
     else:
-        story.append(Paragraph("No features meaningfully increased the score for "
-                               "this application.", _BODY))
-
-    story.append(Paragraph("Factors Reducing the Score", _H3))
-    if negatives:
-        story.extend(
-            Paragraph(escape(f), _BULLET, bulletText="\u2022") for f in negatives)
-    else:
-        story.append(Paragraph("No features meaningfully reduced the score for "
-                               "this application.", _BODY))
-
-    story.append(Paragraph("Overall Explanation", _H3))
-    story.append(Paragraph(escape(explanation["overall_explanation"]), _BODY))
-    story.append(Spacer(1, 6))
-    story.append(Paragraph(escape(explanation["summary"]), _BODY))
+        # CLI/demo path: the category was supplied with the applicant data
+        value = next(
+            (f["value"] for f in assessment["applicant_features"]
+             if f["feature"] == "Credit History"), "")
+        story.append(Paragraph(escape(value), _VALUE))
+        story.append(Paragraph(
+            "This classification was provided with the applicant data for "
+            "this report.", _SMALL))
     return story
 
 
-def _chart_section(assessment):
-    buf = _contribution_chart(assessment)
-    image_reader = ImageReader(buf)
-    img_w, img_h = image_reader.getSize()
-    display_w = 6.55 * inch
-    display_h = display_w * img_h / img_w
-    buf.seek(0)
+def _components_table(block):
+    rows = [[Paragraph("Component", _TABLE_LABEL),
+             Paragraph("Weight", _TABLE_LABEL),
+             Paragraph("Score", _TABLE_LABEL),
+             Paragraph("What it measures", _TABLE_LABEL)]]
+    for component in block["components"]:
+        rows.append([
+            Paragraph(escape(component["name"]), _TABLE_SMALL),
+            Paragraph(escape(component["weight"]), _TABLE_SMALL),
+            Paragraph(escape(f"{component['score']:.1f}"), _TABLE_SMALL),
+            Paragraph(escape(component["description"]), _TABLE_SMALL),
+        ])
+    table = Table(rows, colWidths=[105, 40, 38, 304])
+    table.setStyle(_ROW_STYLE)
+    return table
 
-    return [
-        Image(buf, width=display_w, height=display_h),
-        Spacer(1, 3),
-        Paragraph(
-            "Each bar shows how strongly a feature moved the model's score for this "
-            "applicant, relative to the average training profile. Green raised the "
-            "score, red lowered it.",
-            _SMALL_ITALIC,
-        ),
+
+def _indicator_block(block):
+    """One feature/indicator: heading, value, meaning, how-calculated."""
+    story = [
+        Paragraph(escape(block["label"]), _H3),
+        _value_line(block),
     ]
+    if block.get("meaning"):
+        story.append(Paragraph(escape(block["meaning"]), _BODY))
+    if block.get("components"):
+        story.append(Spacer(1, 3))
+        story.append(Paragraph("How is this calculated?", _SMALL))
+        story.append(Paragraph(escape(block["formula"]), _TABLE_SMALL))
+        story.append(Spacer(1, 2))
+        story.append(_components_table(block))
+        story.append(Spacer(1, 3))
+        story.append(Paragraph(escape(block["simulation_note"]), _SMALL_ITALIC))
+    elif block.get("how_calculated"):
+        story.append(Paragraph(
+            "How is this calculated? " + escape(block["how_calculated"]),
+            _SMALL_ITALIC))
+    if block.get("reference_note"):
+        story.append(Paragraph(escape(block["reference_note"]), _SMALL))
+    story.append(Spacer(1, 4))
+    # keep the heading with at least its value line
+    return [KeepTogether(story[:2])] + story[2:]
+
+
+def _contributors_section(title, blocks, empty_text):
+    story = [Paragraph(title, _H2)]
+    if not blocks:
+        story.append(Paragraph(empty_text, _BODY))
+        return story
+    for block in blocks:
+        story.append(KeepTogether([
+            Paragraph(escape(f"{block['feature']} \u2014 {block['value']}"), _H3),
+            Paragraph(escape(block["meaning"]), _BODY),
+        ]))
+        story.append(Paragraph(escape(block["influence"]), _BODY))
+        if block.get("reference_note"):
+            story.append(Paragraph(escape(block["reference_note"]), _SMALL))
+        story.append(Spacer(1, 4))
+    return story
+
+
+def _pipeline_section(interp, explanation):
+    story = [Paragraph("How the Final Score Was Generated", _H2)]
+    rows = []
+    for stage in interp["score_pipeline"]:
+        rows.append([
+            Paragraph(escape(stage["name"]), _TABLE_VALUE),
+            Paragraph(escape(stage["description"]), _TABLE_SMALL),
+        ])
+    rows.append([
+        Paragraph("ML Scoring Model", ParagraphStyle(
+            "PipelineModel", parent=_TABLE_VALUE, textColor=NAVY)),
+        Paragraph("considers all inputs together", _TABLE_SMALL),
+    ])
+    rows.append([
+        Paragraph("Repayment Score", ParagraphStyle(
+            "PipelineScore", parent=_TABLE_VALUE, textColor=NAVY)),
+        Paragraph("the model's estimated assessment", _TABLE_SMALL),
+    ])
+    table = Table(rows, colWidths=[160, 327])
+    table.setStyle(TableStyle([
+        ("ROWBACKGROUNDS", (0, 0), (-1, -2), [colors.white, LIGHT_ROW]),
+        ("BACKGROUND", (0, -2), (-1, -1), LIGHT_ROW),
+        ("BOX", (0, -2), (-1, -1), 0.5, BORDER),
+        ("LINEBELOW", (0, 0), (-1, -3), 0.5, BORDER),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(escape(interp["pipeline_note"]), _SMALL))
+    story.append(Spacer(1, 8))
+    story.append(Paragraph(escape(explanation["overall_explanation"]), _BODY))
+    return story
 
 
 def _build_story(assessment, explanation):
+    # one shared interpretation source for the PDF and the dashboard; the
+    # CLI path (no stored blocks yet) builds them on the fly
+    interp = assessment.get("interpretation") or build_interpretation_blocks(
+        assessment.get("feature_values", {}), assessment)
+    assessment = {**assessment, "_summary": explanation["summary"]}
+
     timestamp = datetime.now().strftime("%d %b %Y, %H:%M")
     story = [
         Paragraph("Applicant Repayment Assessment", _TITLE),
@@ -249,19 +322,32 @@ def _build_story(assessment, explanation):
         HRFlowable(width="100%", thickness=1.1, color=NAVY),
         Spacer(1, 10),
 
-        Paragraph("Repayment Assessment", _H2),
+        Paragraph("Your Repayment Score", _H2),
     ]
     story.extend(_score_section(assessment))
 
-    story.append(Paragraph("Applicant Information", _H2))
-    story.append(_applicant_table(assessment))
+    story.append(Paragraph("Your Application Information", _H2))
+    story.append(_info_table(interp["application_info"]))
 
-    story.append(Paragraph("Why This Score Was Generated", _H2))
-    story.extend(_factors_section(assessment, explanation))
+    story.append(Paragraph("Credit History Verification", _H2))
+    story.extend(_credit_section(interp, assessment))
 
-    chart_block = [Paragraph("Feature Contribution Analysis", _H2)]
-    chart_block.extend(_chart_section(assessment))
-    story.append(KeepTogether(chart_block))
+    story.append(Paragraph("Your Financial Indicators", _H2))
+    for block in interp["financial_indicators"]:
+        story.extend(_indicator_block(block))
+
+    story.append(Paragraph("Your Digital & Behavioral Indicators", _H2))
+    for block in interp["digital_indicators"]:
+        story.extend(_indicator_block(block))
+
+    story.extend(_contributors_section(
+        "What Supported Your Score", interp["top_supported"],
+        "No features meaningfully increased the score for this application."))
+    story.extend(_contributors_section(
+        "What Reduced Your Score", interp["top_reduced"],
+        "No features meaningfully reduced the score for this application."))
+
+    story.extend(_pipeline_section(interp, explanation))
 
     story.append(Paragraph("Important Notice", _H2))
     disclaimer = Table([[Paragraph(DISCLAIMER, _SMALL_ITALIC)]],
@@ -295,7 +381,7 @@ def render_report(assessment, explanation, output_path):
         leftMargin=54, rightMargin=54, topMargin=52, bottomMargin=56,
         title="Applicant Repayment Assessment",
         author="AI Credit Scoring Prototype",
-        subject="Model-estimated repayment score with feature contribution analysis",
+        subject="Model-estimated repayment score with applicant-facing explanations",
     )
     doc.build(_build_story(assessment, explanation),
               onFirstPage=_footer, onLaterPages=_footer)

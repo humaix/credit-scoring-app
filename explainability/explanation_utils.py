@@ -26,17 +26,19 @@ VALID_LOAN_HISTORY = [
     "Delayed Repayment History", "Previous Default",
 ]
 
+# applicant-facing labels — derived indicators are named as indicators, never
+# as opaque "scores" (the raw model input value is still displayed alongside)
 FEATURE_LABELS = {
     "age": "Age",
     "occupation": "Occupation",
     "monthly_income": "Monthly Income",
-    "existing_loan_history": "Existing Loan History",
+    "existing_loan_history": "Credit History",
     "debt_to_income_ratio": "Debt-to-Income Ratio",
-    "loan_size": "Loan Size",
-    "telecom_usage_score": "Telecom Usage Score",
-    "mobile_wallet_activity": "Mobile Wallet Activity",
-    "digital_purchase_frequency": "Digital Purchase Frequency",
-    "psychometric_score": "Psychometric Score",
+    "loan_size": "Requested Loan",
+    "telecom_usage_score": "Telecom Usage Indicator",
+    "mobile_wallet_activity": "Mobile Wallet Activity Indicator",
+    "digital_purchase_frequency": "Digital Purchase Pattern",
+    "psychometric_score": "Behavioral Assessment",
 }
 
 # contiguous bands so no fractional score (e.g. 60.4) can fall between
@@ -51,7 +53,9 @@ NUMERIC_RANGES = {
     "age": (18, 65, True),
     "monthly_income": (1_000, 5_000_000, False),
     "debt_to_income_ratio": (0.0, 1.0, False),
-    "loan_size": (10_000, 10_000_000, False),
+    # supported loan-amount range: the training dataset spans ~PKR 50,296 to
+    # PKR 1,200,000 — anything outside it is rejected before inference
+    "loan_size": (50_000, 1_200_000, False),
     "telecom_usage_score": (0.0, 1.0, False),
     "mobile_wallet_activity": (0.0, 1.0, False),
     "digital_purchase_frequency": (0, 200, True),

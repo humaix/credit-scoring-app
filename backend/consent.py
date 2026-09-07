@@ -19,6 +19,9 @@ from .models import Application, ConsentRecord, EmploymentVerification
 CONSENT_CATEGORIES = (
     "wallet_activity", "telecom_activity",
     "digital_transactions", "previous_loan_info",
+    # credit-information verification consent (spec section 4) — required
+    # before the credit verification step can run
+    "credit_information_verification",
 )
 
 # only applicable (and only required) for applications with a bank account
@@ -33,6 +36,14 @@ CONSENT_DESCRIPTIONS = {
         "(simulated for this prototype)"),
     "digital_transactions": "Digital purchase frequency information",
     "previous_loan_info": "Previous loan and repayment history",
+    "credit_information_verification": (
+        "I authorize the application/service, where legally permitted and "
+        "applicable, to obtain and verify my credit information from the "
+        "State Bank of Pakistan's Electronic Credit Information Bureau "
+        "(eCIB) and/or an SBP-licensed credit bureau for the purpose of "
+        "assessing my loan application. (This prototype is not connected to "
+        "eCIB or any credit bureau — verification runs as a clearly labelled "
+        "demo simulation.)"),
     "bank_account_data": (
         "Bank account and bank statement data (document-based prototype "
         "verification — no bank or open-banking integration in this prototype)"),
@@ -54,7 +65,7 @@ def applicable_categories(has_bank_account: bool) -> tuple:
 
 
 def consent_notice(has_bank_account: bool) -> str:
-    count = "five" if has_bank_account else "four"
+    count = "six" if has_bank_account else "five"
     return (
         f"Assessment requires consent to all {count} applicable data "
         "categories. If consent is declined, that data cannot be used and no "
@@ -105,6 +116,7 @@ def grant_consent(db: Session, application: Application, choices: dict) -> dict:
         telecom_activity=True,
         digital_transactions=True,
         previous_loan_info=True,
+        credit_information_verification=True,
         # bank data consent exists only for bank-account holders; for the
         # alternative-data path the category is not applicable at all
         bank_account_data=bool(application.has_bank_account),

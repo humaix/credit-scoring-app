@@ -9,7 +9,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from explanation_utils import NUMERIC_RANGES, VALID_LOAN_HISTORY, VALID_OCCUPATIONS
+from explanation_utils import NUMERIC_RANGES, VALID_OCCUPATIONS
 
 from .security import validate_password_policy
 
@@ -25,6 +25,9 @@ WALLET_PROVIDERS = ("JazzCash", "Easypaisa", "Other")
 def _within_model_range(key: str, value: float) -> float:
     low, high, _ = NUMERIC_RANGES[key]
     if not (low <= value <= high):
+        if key == "loan_size":
+            raise ValueError(
+                f"Requested loan amount must be between PKR {int(low):,} and PKR {int(high):,}")
         raise ValueError(f"{key} must be between {low} and {high}")
     return value
 
@@ -138,7 +141,9 @@ class ApplicationCreate(BaseModel):
     occupation: str
     monthly_income: float
     monthly_debt_payments: float = Field(ge=0)
-    existing_loan_history: str
+    # loan history is intentionally absent: the applicant no longer declares
+    # it — it is derived from the credit-information verification step after
+    # consent (spec section 3)
     requested_loan_size: float
     digital_purchase_frequency: int
 
@@ -160,13 +165,6 @@ class ApplicationCreate(BaseModel):
     def _valid_occupation(cls, value: str) -> str:
         if value not in VALID_OCCUPATIONS:
             raise ValueError(f"occupation must be one of {VALID_OCCUPATIONS}")
-        return value
-
-    @field_validator("existing_loan_history")
-    @classmethod
-    def _valid_history(cls, value: str) -> str:
-        if value not in VALID_LOAN_HISTORY:
-            raise ValueError(f"existing_loan_history must be one of {VALID_LOAN_HISTORY}")
         return value
 
     @field_validator("age", "monthly_income", "requested_loan_size",
@@ -253,11 +251,13 @@ class OtpVerifyRequest(ApplicationRef):
 class ConsentGrantRequest(ApplicationRef):
     # a missing category counts as declined; the service names the
     # declined categories in the error message. bank_account_data is only
-    # required when the application declared a bank account (Phase 2)
+    # required when the application declared a bank account (Phase 2);
+    # credit_information_verification is always required (spec section 4)
     wallet_activity: bool = False
     telecom_activity: bool = False
     digital_transactions: bool = False
     previous_loan_info: bool = False
+    credit_information_verification: bool = False
     bank_account_data: bool = False
 
 
@@ -349,6 +349,9 @@ class ConsentPublic(BaseModel):
     telecom_activity: bool
     digital_transactions: bool
     previous_loan_info: bool
+    # credit-information verification consent (always granted when a consent
+    # record exists — the category is required)
+    credit_information_verification: bool = False
     # Phase 2: true only for applications that declared a bank account and
     # consented to sharing bank/statement data
     bank_account_data: bool = False
@@ -388,6 +391,17 @@ class QuestionnairePublic(BaseModel):
     completed_at: datetime
 
 
+class CreditVerificationPublic(BaseModel):
+    """The stored credit verification, as shown to the applicant."""
+    provider: str
+    demo_notice: str
+    credit_data: dict
+    derived_loan_history: str
+    inconsistent: bool
+    explanation: dict
+    created_at: datetime
+
+
 class Contributor(BaseModel):
     feature: str
     value: str
@@ -412,6 +426,7 @@ class AssessmentPublic(BaseModel):
     positive_contributors: list[Contributor]
     negative_contributors: list[Contributor]
     all_contributions: list[Contributor]
+    interpretation: dict | None = None
     explanation: ExplanationPublic
     explanation_source: str
     created_at: datetime
@@ -436,7 +451,8 @@ class ApplicationDetail(ApplicationSummary):
     age: int
     monthly_income: float
     monthly_debt_payments: float
-    existing_loan_history: str
+    # null until the credit verification step runs (never self-declared)
+    existing_loan_history: str | None = None
     digital_purchase_frequency: int
     # ---- Phase 2: bank-account declaration -------------------------------
     # raw IBAN/account number is never exposed — only the masked form
@@ -449,6 +465,8 @@ class ApplicationDetail(ApplicationSummary):
     verification: VerificationPublic | None = None
     # Phase 3: employment / document verification (null until submitted)
     employment: EmploymentPublic | None = None
+    # credit-information verification (null until the step runs)
+    credit_verification: CreditVerificationPublic | None = None
     consent: ConsentPublic | None = None
     questionnaire: QuestionnairePublic | None = None
     assessment: AssessmentPublic | None = None
@@ -500,6 +518,9 @@ class ScoringResponse(BaseModel):
     positive_contributors: list[Contributor]
     negative_contributors: list[Contributor]
     all_contributions: list[Contributor]
+    # applicant-facing interpretation blocks (labels, bands, meanings,
+    # how-calculated expandables, top supported/reduced, score pipeline)
+    interpretation: dict
     explanation: ExplanationPublic
     explanation_source: str
     consistency_warnings: list[str]

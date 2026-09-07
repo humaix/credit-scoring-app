@@ -16,7 +16,9 @@ from sqlalchemy.orm import Session
 
 from .errors import ApiError
 from .flow import STEP_ORDER
-from .models import Application, QuestionnaireResult
+from .models import (
+    Application, CreditVerification, QuestionnaireResult,
+)
 
 LIKERT_LABELS = [
     "Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree",
@@ -123,6 +125,20 @@ def save_questionnaire(db: Session, application: Application, answers: list) -> 
         raise ApiError(
             409, "invalid_state",
             f"Application is '{application.status}'; expected step order: {STEP_ORDER}")
+
+    # the credit-information verification is a sub-step that happens while
+    # the application is 'consented' and must be completed before the
+    # questionnaire — it supplies the loan-history feature the model needs
+    verification = (
+        db.query(CreditVerification)
+        .filter(CreditVerification.application_id == application.id)
+        .first()
+    )
+    if verification is None:
+        raise ApiError(
+            409, "credit_verification_required",
+            "Complete the credit information verification step before "
+            "starting the financial behaviour assessment")
 
     psychometric, warnings = score_questionnaire(answers)
     record = QuestionnaireResult(

@@ -1,0 +1,960 @@
+# Task: Fix Credit Scoring Input Validation, Credit History Verification, Derived Feature Transparency, and Applicant-Facing Explainability
+
+We already have a trained XGBoost repayment-scoring model and an existing SHAP + LLM + PDF explainability pipeline.
+
+**Important: Do NOT retrain the model and do NOT regenerate the dataset. The existing trained model must remain unchanged.**
+
+The goal of this task is to improve the application/input flow and make the explainability genuinely useful and understandable to a normal applicant.
+
+---
+
+## 1. Preserve the Existing Model
+
+Do not modify, retrain, or replace the saved XGBoost model.
+
+Do not change the model's learned behavior.
+
+The model currently expects the existing model features, including:
+
+* age
+* occupation
+* monthly_income
+* existing_loan_history
+* debt_to_income_ratio
+* loan_size
+* telecom_usage_score
+* mobile_wallet_activity
+* digital_purchase_frequency
+* psychometric_score
+
+`loan_history_code` is only a numeric encoding of `existing_loan_history`.
+
+Do NOT pass both `existing_loan_history` and `loan_history_code` to the model.
+
+The model must continue using `existing_loan_history` as the categorical feature.
+
+---
+
+# 2. Loan Amount Validation Must Happen at the Beginning
+
+The applicant should be told the supported loan amount range when filling out the application.
+
+Based on the current training dataset, the supported loan amount range is approximately:
+
+* Minimum: PKR 50,000
+* Maximum: PKR 1,200,000
+
+The generated dataset has a minimum observed loan size of approximately PKR 50,296 and a maximum of PKR 1,200,000.
+
+Implement this as an application-level validation rule.
+
+### UI behavior
+
+When the applicant enters the requested loan amount, show:
+
+> Requested loan amount must be between PKR 50,000 and PKR 1,200,000.
+
+If the entered value is below 50,000 or above 1,200,000:
+
+* Show a clear validation error.
+* Do not allow the application to proceed.
+* Do not call the ML model.
+* Do not calculate SHAP.
+* Do not generate the PDF.
+* Do not call the LLM.
+
+Example:
+
+> **Loan amount out of range**
+> Please enter a loan amount between PKR 50,000 and PKR 1,200,000.
+
+This validation must happen before model inference.
+
+Also remove the old validation range that allowed:
+
+`10,000 – 10,000,000`
+
+The current model must never silently score an unsupported loan amount.
+
+---
+
+# 3. Remove Manual Loan History Questions From the Applicant Form
+
+Currently the application asks the applicant question such as:
+
+enter cradit loan history
+
+Remove these questions from the normal applicant input form.
+
+The applicant should NOT manually provide the `existing_loan_history` model feature.
+
+Instead, the system should obtain/verify credit-history information through a credit-information verification step.
+
+---
+
+# 4. Add Credit History Consent
+
+Before performing credit-history verification, add a clear consent section.
+
+Use wording similar to:
+
+### Credit Information Verification Consent
+
+> I authorize the application/service, where legally permitted and applicable, to obtain and verify my credit information from the State Bank of Pakistan's Electronic Credit Information Bureau (eCIB) and/or an SBP-licensed credit bureau for the purpose of assessing my loan application.
+
+Include a required checkbox:
+
+> [ ] I agree to credit information verification.
+
+The applicant cannot proceed to scoring unless the required consent is accepted.
+
+Do NOT claim that the system is actually connected to eCIB unless a real authorized API/integration exists.
+
+---
+
+# 5. Important Prototype / Demo Behavior
+
+This project currently does not have a real eCIB or credit-bureau integration.
+
+Therefore, do NOT pretend that random data came from eCIB.
+
+For the current prototype/demo:
+
+Create a clearly separated mock credit-verification provider/service.
+
+For example:
+
+`MockCreditVerificationService`
+
+The service should simulate the response that would eventually come from an authorized credit-information provider.
+
+The UI must clearly label this:
+
+> **Demo Credit Verification**
+> Credit-history information shown here is simulated for demonstration purposes and is not retrieved from a real credit bureau.
+
+Do NOT display simulated values as if they were real verified financial records.
+
+Keep the architecture ready so that the mock provider can later be replaced by a real authorized provider/API.
+
+---
+
+# 6. Mock Credit Verification Data
+
+The mock verification response should contain these fields:
+
+```text
+has_previous_loan
+has_credit_card
+total_outstanding_amount
+installments_paid_on_time
+has_overdue_or_default
+total_existing_debt
+```
+
+Use realistic randomized values for demo applicants.
+
+However, the generated values must NOT be completely independent random noise.
+
+They should be logically consistent.
+
+Examples:
+
+### Example A — Good credit history
+
+```text
+has_previous_loan = True
+has_credit_card = True
+total_outstanding_amount = PKR 35,000
+installments_paid_on_time = 18
+has_overdue_or_default = False
+total_existing_debt = PKR 35,000
+```
+
+This should map to:
+
+```text
+existing_loan_history = "Good Repayment History"
+```
+
+### Example B — No previous loan
+
+```text
+has_previous_loan = False
+has_credit_card = False
+total_outstanding_amount = PKR 0
+installments_paid_on_time = 0
+has_overdue_or_default = False
+total_existing_debt = PKR 0
+```
+
+This should map to:
+
+```text
+existing_loan_history = "No Previous Loan"
+```
+
+### Example C — Delayed repayment
+
+```text
+has_previous_loan = True
+has_credit_card = True
+total_outstanding_amount = PKR 60,000
+installments_paid_on_time = 8
+has_overdue_or_default = False
+total_existing_debt = PKR 60,000
+```
+
+This should map to:
+
+```text
+existing_loan_history = "Delayed Repayment History"
+```
+
+### Example D — Previous default
+
+```text
+has_previous_loan = True
+has_credit_card = True
+total_outstanding_amount = PKR 90,000
+installments_paid_on_time = 3
+has_overdue_or_default = True
+total_existing_debt = PKR 90,000
+```
+
+This should map to:
+
+```text
+existing_loan_history = "Previous Default"
+```
+
+Use the actual categories already supported by the trained model:
+
+* No Previous Loan
+* Good Repayment History
+* Delayed Repayment History
+* Previous Default
+
+Do not invent new categories.
+
+---
+
+# 7. Deterministic Mapping From Credit Information to Existing Loan History
+
+Do not ask the LLM to decide the loan-history category.
+
+Implement a deterministic Python function.
+
+For example:
+
+```python
+def derive_loan_history(credit_data):
+    ...
+```
+
+The mapping should be documented and deterministic.
+
+Suggested logic:
+
+1. If `has_previous_loan == False` and there is no outstanding debt:
+   → `No Previous Loan`
+
+2. If `has_overdue_or_default == True`:
+   → `Previous Default`
+
+3. If previous borrowing exists and repayment behavior is consistently on time:
+   → `Good Repayment History`
+
+4. If previous borrowing exists but there is evidence of delayed payments without default:
+   → `Delayed Repayment History`
+
+The exact implementation should handle inconsistent mock records safely.
+
+For example, if `has_previous_loan == False` but outstanding debt is greater than zero, flag the record as inconsistent rather than silently generating a misleading category.
+
+---
+
+# 8. Explain Credit History to the Applicant
+
+Do not simply show:
+
+> Existing Loan History: Good Repayment History
+
+Instead provide a "View details" / expandable section.
+
+Example:
+
+### Credit History
+
+**Verified result: Good Repayment History**
+
+[View how this was determined]
+
+When expanded:
+
+```text
+Previous loan: Yes
+Credit card: Yes
+Outstanding amount: PKR 35,000
+Installments paid on time: 18
+Overdue/default detected: No
+Total existing debt: PKR 35,000
+```
+
+Then:
+
+> Based on these credit-history indicators, the system classified your repayment history as **Good Repayment History**.
+
+For the prototype, clearly show:
+
+> Demo data — simulated credit verification.
+
+---
+
+# 9. Do Not Expose Opaque Scores Without Explanation
+
+The current application exposes values such as:
+
+```text
+Telecom Usage Score = 0.36
+Mobile Wallet Activity = 0.72
+Psychometric Score = 64.6
+```
+
+This is not sufficiently understandable to applicants.
+
+Do NOT remove these features from the trained model.
+
+Instead, change how they are presented.
+
+Use human-readable labels such as:
+
+* Telecom Usage Indicator
+* Mobile Wallet Activity Indicator
+* Behavioral/Psychometric Assessment
+
+The exact model input value may still be shown, but it must not be the only explanation.
+
+---
+
+# 10. Add "How was this value calculated?" Expandable Sections
+
+For every derived/composite feature, provide an expandable explanation.
+
+Example:
+
+## Mobile Wallet Activity
+
+Show:
+
+```text
+Mobile Wallet Activity: 0.72
+Assessment: High
+```
+
+Add:
+
+> How is this calculated?
+
+When expanded, explain the underlying components.
+
+The intended conceptual components are:
+
+1. Transaction Frequency — 30%
+2. Average Balance Maintained — 25%
+3. Inflow vs Outflow Ratio — 25%
+4. Wallet Account Age — 20%
+
+Formula:
+
+```text
+Wallet Activity =
+(0.30 × Transaction Frequency)
++ (0.25 × Average Balance)
++ (0.25 × Inflow/Outflow Ratio)
++ (0.20 × Account Age)
+```
+
+Explain each component in plain language.
+
+For example:
+
+```text
+Transaction Frequency
+Measures how regularly the wallet is used.
+
+Average Balance
+Represents the average balance maintained in the wallet.
+
+Inflow vs Outflow
+Compares money received with money spent.
+
+Account Age
+Measures how long the wallet account has been active.
+```
+
+---
+
+# 11. IMPORTANT: Do Not Claim These Components Are Actually Used If They Are Not
+
+The current trained synthetic dataset contains an already-generated `mobile_wallet_activity` value.
+
+The existing dataset/model documentation must be respected.
+
+If the current application does not actually collect:
+
+* transaction frequency
+* average balance
+* inflow
+* outflow
+* wallet account age
+
+then do NOT falsely calculate a new wallet score from these fields.
+
+Instead, clearly distinguish between:
+
+### Current prototype model input
+
+> Mobile Wallet Activity Indicator: 0.72
+
+and:
+
+### Intended real-world construction
+
+> In a production implementation, this indicator can be constructed from transaction frequency, average balance, inflow/outflow behavior and account age.
+
+Do NOT modify the trained model input.
+
+If these underlying variables already exist somewhere in the application, use the actual values and show the real calculation.
+
+---
+
+# 12. Same Approach for Telecom Usage
+
+Do not show only:
+
+> Telecom Usage Score: 0.36
+
+Instead show:
+
+### Telecom Usage Indicator
+
+```text
+Indicator: 0.36
+Assessment: [appropriate human-readable category]
+```
+
+Add:
+
+> How is this calculated?
+
+The explanation must be based only on the actual data available to the system.
+
+If the current prototype only has the aggregate `telecom_usage_score`, say clearly:
+
+> This is a composite telecom-usage indicator used by the current scoring model. The current prototype receives this indicator as a model input rather than calculating it from raw telecom records.
+
+Do NOT invent raw telecom measurements.
+
+If raw telecom inputs exist, explain their actual calculation.
+
+---
+
+# 13. Add Reference Context for Numeric Values
+
+Applicants need context.
+
+For example, instead of:
+
+> Monthly Income: PKR 20,500
+> Negative contribution
+
+show:
+
+### Monthly Income
+
+**PKR 20,500**
+
+> Your reported monthly income is below the typical income level represented in the model's training data.
+
+If appropriate, show:
+
+```text
+Your income: PKR 20,500
+Training-data median: approximately PKR 63,322
+```
+
+Do not present the median as a requirement or minimum income.
+
+Use wording such as:
+
+> This is a reference point from the model's training data, not an eligibility threshold.
+
+The dataset report shows a median monthly income of approximately PKR 63,321.50.
+
+---
+
+# 14. Fix the "What Helped / What Worked Against" Explanation
+
+The current explanation is too SHAP-centric.
+
+Do NOT expose raw SHAP numbers to the normal applicant.
+
+Instead:
+
+### What supported your score
+
+For each positive SHAP contributor:
+
+1. Show the applicant's actual value.
+2. Explain what the value means.
+3. Explain why it supported the score.
+4. Avoid claiming causality.
+
+Example:
+
+> **Debt-to-Income Ratio — 12%**
+> Your reported debt burden is relatively low compared with the patterns represented in the model's training data. This factor contributed positively to your model score.
+
+### What reduced your score
+
+Example:
+
+> **Monthly Income — PKR 20,500**
+> Your reported income is relatively low compared with the typical income level represented in the training data. This factor had a negative influence on the model score.
+
+Avoid statements like:
+
+> "Your low income caused you to receive a low score."
+
+Use:
+
+> "This factor had a negative influence on the model score."
+
+---
+
+# 15. Never Override SHAP Direction
+
+Do NOT manually force:
+
+```text
+income = positive
+loan_size = negative
+```
+
+in the explanation layer.
+
+The explanation must accurately reflect the saved model's actual SHAP contribution.
+
+If SHAP says a feature contributed negatively, the explanation must say negative.
+
+The explanation layer must not manipulate SHAP values to make the explanation look more intuitive.
+
+However, if an applicant value is outside the supported training range, the application must stop before inference rather than generating an unreliable explanation.
+
+---
+
+# 16. SHAP Remains a Technical Explanation Layer
+
+Keep SHAP internally.
+
+Architecture:
+
+```text
+Applicant Input
+       ↓
+Input Validation
+       ↓
+Credit Verification
+       ↓
+Feature Construction
+       ↓
+Saved XGBoost Model
+       ↓
+Repayment Score
+       ↓
+SHAP
+       ↓
+Human-readable Feature Interpretation
+       ↓
+LLM / deterministic wording
+       ↓
+Applicant Report
+```
+
+SHAP should provide the factual model contribution.
+
+The interpretation layer should provide context and meaning.
+
+The LLM should only turn already-validated information into natural language.
+
+---
+
+# 17. LLM Safety Rules
+
+The LLM must NOT:
+
+* calculate the score
+* modify the score
+* modify SHAP contributions
+* reverse positive/negative direction
+* invent feature values
+* invent data sources
+* claim simulated data is real
+* decide the loan-history category
+* make approval/rejection decisions
+* invent formulas
+* claim causality
+* provide financial advice
+
+The LLM receives structured information such as:
+
+```json
+{
+  "feature": "monthly_income",
+  "value": "PKR 20,500",
+  "reference": "Below training-data median",
+  "shap_direction": "negative",
+  "shap_contribution": -3.2,
+  "human_interpretation": "Income level is relatively low compared with the model's training-data reference distribution."
+}
+```
+
+The LLM only verbalizes this information.
+
+---
+
+# 18. Applicant-Facing Report Structure
+
+Redesign the report section to approximately this structure:
+
+## Your Repayment Score
+
+**71.9 / 100**
+
+**Assessment: High**
+
+Short explanation:
+
+> Your score reflects the combined influence of your financial, credit-history, loan-request, digital-activity and behavioral information.
+
+---
+
+## Your Application Information
+
+Show the information actually provided by the applicant:
+
+* Age
+* Occupation
+* Monthly income
+* Requested loan amount
+
+---
+
+## Credit History Verification
+
+Show:
+
+**Good Repayment History**
+
+[View details]
+
+Expanded:
+
+* Previous loan: Yes
+* Credit card: Yes
+* Outstanding amount: PKR 35,000
+* Installments paid on time: 18
+* Overdue/default: No
+* Total existing debt: PKR 35,000
+
+Clearly mark simulated/demo data when using the mock provider.
+
+---
+
+## Your Financial Indicators
+
+Show meaningful values:
+
+### Monthly Income
+
+PKR 20,500
+
+### Debt-to-Income Ratio
+
+0%
+
+[How is this calculated?]
+
+### Requested Loan
+
+PKR 100,000
+
+---
+
+## Your Digital & Behavioral Indicators
+
+### Mobile Wallet Activity
+
+0.72 — High
+
+[How is this calculated?]
+
+### Telecom Usage
+
+0.36 — [appropriate interpretation]
+
+[How is this calculated?]
+
+### Digital Purchase Pattern
+
+[human-readable interpretation]
+
+### Behavioral Assessment
+
+64.6 / 100 — Moderate
+
+[What does this mean?]
+
+---
+
+## What Supported Your Score
+
+Show top 3 positive contributors with meaningful explanations.
+
+---
+
+## What Reduced Your Score
+
+Show top 3 negative contributors with meaningful explanations.
+
+---
+
+## How the Final Score Was Generated
+
+Use a simple visual explanation:
+
+```text
+Financial Information
+        +
+Credit History
+        +
+Loan Request
+        +
+Digital Activity
+        +
+Behavioral Indicators
+        ↓
+   ML Scoring Model
+        ↓
+Repayment Score
+```
+
+Do NOT imply that the displayed categories are manually added together to produce the final score. Explain that the XGBoost model considers these inputs together.
+
+---
+
+# 19. Add "Why am I seeing this value?" UI
+
+Every opaque/derived feature should have an expandable section.
+
+Example:
+
+```text
+Mobile Wallet Activity     0.72   High
+                           [ Why? ]
+
+Telecom Usage              0.36   Moderate
+                           [ Why? ]
+
+Debt-to-Income Ratio       18%
+                           [ How calculated? ]
+
+Credit History             Good
+                           [ View verification details ]
+```
+
+This is much more useful than displaying raw SHAP values.
+
+---
+
+# 20. Do Not Use Risk Bands for Individual Sub-Features
+
+Do not label:
+
+```text
+Mobile Wallet Activity = Low Risk
+```
+
+or:
+
+```text
+Telecom Usage = High Risk
+```
+
+These are model inputs/indicators, not the final credit-risk decision.
+
+Use:
+
+* Low / Moderate / High activity
+* Weak / Moderate / Strong indicator
+* Below / Around / Above reference level
+
+The final repayment assessment should be based on the final model score.
+
+---
+
+# 21. Keep Existing PDF and UI Styling
+
+Do not unnecessarily redesign the entire application.
+
+Preserve the existing professional styling.
+
+Modify only the relevant sections.
+
+The explanation must be readable by a normal applicant, not only by an ML engineer.
+
+Do not show technical terms such as:
+
+* SHAP value
+* TreeSHAP
+* feature attribution
+* model coefficient
+
+in the normal applicant-facing report.
+
+If desired, technical SHAP details can remain available in a separate developer/admin debug view.
+
+---
+
+# 22. Validation Requirements
+
+Add tests for all of the following:
+
+### Loan amount
+
+* 49,999 → rejected
+* 50,000 → accepted
+* 1,200,000 → accepted
+* 1,200,001 → rejected
+* invalid text → rejected
+* missing value → rejected
+
+### Consent
+
+* consent unchecked → application cannot proceed to credit verification
+* consent checked → verification step allowed
+
+### Credit history
+
+Verify that the deterministic mapping correctly produces:
+
+* No Previous Loan
+* Good Repayment History
+* Delayed Repayment History
+* Previous Default
+
+### Mock data
+
+Ensure mock credit-history values are internally consistent.
+
+### Explainability
+
+Verify:
+
+* displayed score equals model score
+* SHAP direction is preserved
+* no SHAP contribution is modified
+* feature values are not changed by LLM
+* LLM cannot introduce unknown feature names
+* simulated credit information is clearly labelled
+* unsupported loan amounts never reach model inference
+
+### Regression
+
+Run the existing test suite and ensure existing model/explainability functionality continues to work.
+
+---
+
+# 23. Important Implementation Constraint
+
+Do not create a second scoring model.
+
+Do not create a manually weighted replacement score.
+
+Do not calculate a new repayment score from the explanatory text.
+
+The existing XGBoost model remains the only source of the final repayment score.
+
+The new logic is only for:
+
+* input validation
+* credit-history verification simulation
+* derived-feature transparency
+* human-readable explanations
+* applicant-facing presentation
+
+---
+
+# 24. Code Quality
+
+Use concise, human comments.
+
+Do not add huge explanatory paragraphs inside code comments.
+
+Comments should explain only non-obvious logic.
+
+Keep the implementation modular and production-like.
+
+Prefer small functions such as:
+
+```python
+validate_loan_amount()
+verify_credit_history()
+derive_loan_history()
+build_feature_interpretation()
+build_credit_history_explanation()
+build_wallet_activity_explanation()
+build_telecom_explanation()
+validate_llm_explanation()
+```
+
+Do not duplicate logic across the PDF and UI.
+
+Create reusable interpretation utilities where possible.
+
+---
+
+# 25. Final Acceptance Criteria
+
+The implementation is complete only when:
+
+1. Applicant sees the valid loan range before submission.
+2. Invalid loan amount stops the application immediately.
+3. Manual loan-history questions are removed.
+4. Credit-history consent is added.
+5. The system architecture supports eCIB / SBP-licensed credit-bureau verification in the future.
+6. Current prototype uses a clearly labelled mock verification service.
+7. Mock credit data is internally consistent.
+8. Mock credit data is deterministically mapped to the model's existing loan-history categories.
+9. Raw SHAP values are hidden from normal applicants.
+10. Mobile-wallet and telecom indicators have "How is this calculated?" explanations.
+11. The system never invents underlying raw data.
+12. Applicant sees actual values plus meaningful context.
+13. Positive/negative explanations remain faithful to SHAP.
+14. LLM cannot modify model facts.
+15. Final score is still produced exclusively by the existing trained XGBoost model.
+16. No dataset regeneration is performed.
+17. No model retraining is performed.
+18. Existing tests continue to pass.
+19. New tests cover loan validation, consent, credit-history mapping, explanation integrity and regression.
+20. The final PDF and UI are understandable to a normal applicant without ML knowledge.
+
+After implementation, provide a concise summary of:
+
+* files changed
+* functions/classes added or modified
+* tests added
+* tests passed
+* any assumptions made
+* any parts that remain simulated because real credit-bureau integration is unavailable

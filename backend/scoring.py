@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from explanation_utils import (
     FEATURE_LABELS, MODEL_FEATURES, format_feature_value, validate_applicant_data,
 )
+from interpretation import PROVIDER_SIMULATION_NOTE, build_interpretation_blocks
 from llm_explainer import (
     fallback_explanation, generate_natural_language_explanation,
 )
@@ -23,8 +24,11 @@ from report_generator import render_report
 from shap_explainer import assess_applicant
 
 from . import config
+from .credit_verification import credit_verification_public
 from .errors import ApiError
-from .feature_builder import PROVIDER_SIMULATION_NOTE, build_features
+from .feature_builder import (
+    build_features, telecom_component_scores, wallet_component_scores,
+)
 from .flow import STEP_ORDER
 from .models import Application, AssessmentResult, ReportFile
 
@@ -64,6 +68,7 @@ def _rebuild_assessment(row: AssessmentResult) -> dict:
         "negative_contributors": row.negative_contributors,
         "all_contributions": row.all_contributions,
         "base_value": row.base_value,
+        "interpretation": row.interpretation,
     }
 
 
@@ -117,6 +122,26 @@ def run_scoring(db: Session, application: Application) -> dict:
     assessment = assess_applicant(applicant)
     explanation = generate_natural_language_explanation(assessment)
 
+    # applicant-facing interpretation blocks (spec sections 9-19), shared by
+    # the API response, the dashboard and the PDF — one source of truth
+    credit_history = (
+        credit_verification_public(application.credit_verification)
+        if application.credit_verification is not None else None)
+    interpretation = build_interpretation_blocks(
+        applicant, assessment,
+        credit_history=credit_history,
+        provider_components={
+            "telecom": telecom_component_scores(
+                application.digital_purchase_frequency,
+                application.monthly_income, application.age),
+            "wallet": wallet_component_scores(
+                application.digital_purchase_frequency,
+                application.monthly_income,
+                applicant["debt_to_income_ratio"]),
+        },
+    )
+    assessment["interpretation"] = interpretation
+
     pdf_path = _pdf_path_for(application.id)
     try:
         render_report(assessment, explanation, pdf_path)
@@ -136,6 +161,7 @@ def run_scoring(db: Session, application: Application) -> dict:
         negative_contributors=assessment["negative_contributors"],
         all_contributions=assessment["all_contributions"],
         applicant_features=applicant,
+        interpretation=interpretation,
         explanation=explanation,
         explanation_source=explanation["source"],
     )
@@ -156,6 +182,7 @@ def run_scoring(db: Session, application: Application) -> dict:
         "positive_contributors": assessment["positive_contributors"],
         "negative_contributors": assessment["negative_contributors"],
         "all_contributions": assessment["all_contributions"],
+        "interpretation": interpretation,
         "explanation": explanation,
         "explanation_source": explanation["source"],
         "consistency_warnings": warnings,

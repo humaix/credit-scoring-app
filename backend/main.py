@@ -11,8 +11,8 @@ from . import config
 from .db import init_db
 from .errors import ApiError
 from .routers import (
-    applications, assessment, auth, consent, employment, meta, scoring,
-    verification,
+    applications, assessment, auth, consent, credit_verification, employment,
+    meta, scoring, verification,
 )
 
 
@@ -46,9 +46,10 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.CORS_ORIGINS,
+        allow_origin_regex=r"^https://.*\.vercel\.app$",
         allow_credentials=False,
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type", "X-Session-Token"],
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     @app.exception_handler(ApiError)
@@ -81,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(verification.router)
     app.include_router(employment.router)
     app.include_router(consent.router)
+    app.include_router(credit_verification.router)
     app.include_router(assessment.router)
     app.include_router(scoring.router)
     app.include_router(meta.router)

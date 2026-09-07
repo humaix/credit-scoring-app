@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ..auth import (
     applicant_public, get_current_applicant, get_owned_application, mask_iban,
 )
+from ..credit_verification import credit_verification_public
 from ..db import get_db
 from ..employment_docs import (
     DOC_STATUS_LABELS, DOC_STATUS_NOTICE, no_document_notice,
@@ -43,6 +44,8 @@ def _detail(application: Application) -> dict:
         "age": application.age,
         "monthly_income": application.monthly_income,
         "monthly_debt_payments": application.monthly_debt_payments,
+        # loan history comes from the credit verification step — null until
+        # that step has run (applicants never declare it themselves)
         "existing_loan_history": application.existing_loan_history,
         "digital_purchase_frequency": application.digital_purchase_frequency,
         # bank declaration — the raw IBAN/account number never leaves the API
@@ -54,6 +57,7 @@ def _detail(application: Application) -> dict:
         "applicant": applicant_public(application.applicant),
         "verification": None,
         "employment": None,
+        "credit_verification": None,
         "consent": None,
         "questionnaire": None,
         "assessment": None,
@@ -90,9 +94,14 @@ def _detail(application: Application) -> dict:
             "telecom_activity": application.consent.telecom_activity,
             "digital_transactions": application.consent.digital_transactions,
             "previous_loan_info": application.consent.previous_loan_info,
+            "credit_information_verification": (
+                application.consent.credit_information_verification),
             "bank_account_data": application.consent.bank_account_data,
             "granted_at": application.consent.granted_at,
         }
+    if application.credit_verification is not None:
+        data["credit_verification"] = credit_verification_public(
+            application.credit_verification)
     if application.questionnaire is not None:
         data["questionnaire"] = {
             "psychometric_score": application.questionnaire.psychometric_score,
@@ -110,6 +119,7 @@ def _detail(application: Application) -> dict:
             "positive_contributors": application.assessment.positive_contributors,
             "negative_contributors": application.assessment.negative_contributors,
             "all_contributions": application.assessment.all_contributions,
+            "interpretation": application.assessment.interpretation,
             "explanation": application.assessment.explanation,
             "explanation_source": application.assessment.explanation_source,
             "created_at": application.assessment.created_at,
@@ -129,7 +139,8 @@ def create_application(
         occupation=payload.occupation,
         monthly_income=payload.monthly_income,
         monthly_debt_payments=payload.monthly_debt_payments,
-        existing_loan_history=payload.existing_loan_history,
+        # existing_loan_history stays null here — the credit verification
+        # step fills it in after consent
         requested_loan_size=payload.requested_loan_size,
         digital_purchase_frequency=payload.digital_purchase_frequency,
         # Phase 2: the bank-account answer steers the rest of the flow

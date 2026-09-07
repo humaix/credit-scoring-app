@@ -15,24 +15,23 @@ from backend.questionnaire import QUESTIONS
 
 TEST_PASSWORD = "Roshan123"
 
+# loan history is intentionally absent from every payload: the applicant no
+# longer declares it — the credit-verification step derives it after consent
 STRONG = {
     "age": 45, "occupation": "Business Owner", "monthly_income": 120000,
     "monthly_debt_payments": 14400,
-    "existing_loan_history": "Good Repayment History",
     "requested_loan_size": 300000, "digital_purchase_frequency": 8,
     "has_bank_account": False,
 }
 MODERATE = {
     "age": 38, "occupation": "Self-Employed", "monthly_income": 65000,
     "monthly_debt_payments": 19500,
-    "existing_loan_history": "No Previous Loan",
     "requested_loan_size": 500000, "digital_purchase_frequency": 5,
     "has_bank_account": False,
 }
 WEAK = {
     "age": 26, "occupation": "Daily Wage Worker", "monthly_income": 28000,
     "monthly_debt_payments": 15400,
-    "existing_loan_history": "Previous Default",
     "requested_loan_size": 350000, "digital_purchase_frequency": 2,
     "has_bank_account": False,
 }
@@ -89,7 +88,8 @@ def likert_answers(orientation):
 
 
 def full_flow(client, payload, answers):
-    """register -> application -> OTP verify -> employment -> consent -> questionnaire."""
+    """register -> application -> OTP verify -> employment -> consent ->
+    credit verification -> questionnaire."""
     response = client.post("/api/auth/register", json=unique_identity())
     assert response.status_code == 200, response.text
     headers = {"X-Session-Token": response.json()["session_token"]}
@@ -113,8 +113,11 @@ def full_flow(client, payload, answers):
         "application_id": application_id,
         "wallet_activity": True, "telecom_activity": True,
         "digital_transactions": True, "previous_loan_info": True,
+        "credit_information_verification": True,
     }, headers=headers)
     assert response.status_code == 200, response.text
+
+    verify_credit(client, headers, application_id)
 
     response = client.post("/api/assessment/psychometric",
                            json={"application_id": application_id,
@@ -150,6 +153,15 @@ def submit_employment(client, headers, application_id, payload) -> dict:
         "application_id": application_id,
         **employment_submission_for(payload),
     }, headers=headers)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def verify_credit(client, headers, application_id) -> dict:
+    """Run the credit-information verification step (after consent)."""
+    response = client.post("/api/credit-verification",
+                           json={"application_id": application_id},
+                           headers=headers)
     assert response.status_code == 200, response.text
     return response.json()
 

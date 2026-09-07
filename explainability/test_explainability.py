@@ -103,7 +103,10 @@ def test_three_applicants():
         text = _pdf_text(pdf_path)
         flat = " ".join(text.split())
 
-        check(f"{label}: PDF created", pdf_path.exists() and pdf_path.stat().st_size > 10_000)
+        # no embedded chart image any more (raw contribution numbers are
+        # hidden from applicants) - a full multi-section report is ~8 KB
+        check(f"{label}: PDF created",
+              pdf_path.exists() and pdf_path.stat().st_size > 5_000)
         check(f"{label}: score within 0-100",
               0 <= assessment["repayment_score"] <= 100)
         check(f"{label}: PDF opens", len(PdfReader(str(pdf_path)).pages) >= 1)
@@ -172,8 +175,8 @@ def test_llm_paths(assessment):
     try:
         valid = json.dumps({
             "summary": "Synthetic summary for testing.",
-            "positive_factors": ["Income helped the score."],
-            "negative_factors": ["Debt ratio hurt the score."],
+            "positive_factors": ["Monthly Income of PKR 65,000 supported the score."],
+            "negative_factors": ["The Debt-to-Income Ratio reduced the score."],
             "overall_explanation": "Synthetic overall explanation.",
         })
         llm_explainer._post_chat_completion = lambda messages: valid
@@ -198,6 +201,26 @@ def test_llm_paths(assessment):
         llm_explainer._post_chat_completion = lambda messages: incomplete
         out = llm_explainer.generate_natural_language_explanation(assessment)
         check("LLM: dropped contributors rejected", out["source"] == "fallback")
+
+        # sentences must anchor to known feature labels - invented feature
+        # names (or technical jargon) force the safe fallback templates
+        invented = json.dumps({
+            "summary": "Fine summary.",
+            "positive_factors": ["The applicant's Rocket Science Quotient helped."],
+            "negative_factors": [],
+            "overall_explanation": "Fine overall explanation."})
+        llm_explainer._post_chat_completion = lambda messages: invented
+        out = llm_explainer.generate_natural_language_explanation(assessment)
+        check("LLM: invented feature name rejected", out["source"] == "fallback")
+
+        jargon = json.dumps({
+            "summary": "Mentions shap values in the summary.",
+            "positive_factors": ["Monthly Income of PKR 65,000 supported the score."],
+            "negative_factors": [],
+            "overall_explanation": "Fine overall explanation."})
+        llm_explainer._post_chat_completion = lambda messages: jargon
+        out = llm_explainer.generate_natural_language_explanation(assessment)
+        check("LLM: technical terminology rejected", out["source"] == "fallback")
     finally:
         llm_explainer._post_chat_completion = original
 

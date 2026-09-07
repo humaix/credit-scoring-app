@@ -23,12 +23,16 @@ The composite is divided by 100 to reach the model's 0-1 feature scale and
 clamped to the range the model saw in training. Every component is a
 deterministic function of the applicant's declared profile, so identical
 declared input always produces an identical score (no hidden randomness
-anywhere in the demo).
+anywhere in the demo). The component scores are also exposed (0-100 each) so
+the applicant-facing "How is this calculated?" explanations show the real
+calculation instead of inventing one.
 
 Cross-field consistency checks (validation Layer 4) return warnings only:
 they flag clearly inconsistent combinations for manual review and never
 reject an applicant or change the score.
 """
+
+from interpretation import PROVIDER_SIMULATION_NOTE  # single shared wording
 
 from .models import Application
 
@@ -36,38 +40,46 @@ from .models import Application
 _TELECOM_MIN, _TELECOM_MAX = 0.20, 0.98
 _WALLET_MIN, _WALLET_MAX = 0.10, 0.95
 
-PROVIDER_SIMULATION_NOTE = (
-    "Telecom and wallet summaries are simulated for this prototype (no real "
-    "provider is contacted). Each is the documented weighted composite — "
-    "telecom: 30% recharge consistency, 20% account type, 25% SIM tenure, "
-    "25% average recharge amount; wallet: 30% transaction frequency, 25% "
-    "average balance, 25% inflow/outflow ratio, 20% account age — computed "
-    "deterministically from the applicant's declared profile."
-)
+
+def telecom_component_scores(purchases: float, monthly_income: float,
+                             age: int) -> dict:
+    """The four documented telecom components, each on a 0-100 scale."""
+    consistency = min(max(purchases, 0.0) / 10.0, 1.0) * 100.0
+    return {
+        "recharge_consistency": consistency,
+        "account_type": 60.0 + 0.4 * consistency,  # prepaid, consistency-adjusted
+        "sim_tenure": min(max(age - 18, 0) * 4.0 / 36.0, 1.0) * 100.0,
+        "avg_recharge": min(max(monthly_income, 0.0) * 0.02 / 2500.0, 1.0) * 100.0,
+    }
+
+
+def wallet_component_scores(purchases: float, monthly_income: float,
+                            debt_to_income: float) -> dict:
+    """The four documented wallet components, each on a 0-100 scale."""
+    return {
+        "transaction_frequency": min(max(purchases, 0.0) / 12.0, 1.0) * 100.0,
+        "average_balance": min(max(monthly_income, 0.0) * 0.40 / 60000.0, 1.0) * 100.0,
+        "inflow_outflow": min(
+            2.0 * (1.0 - min(max(debt_to_income, 0.0), 1.0)) * 50.0, 100.0),
+        "account_age": min(max(purchases, 0.0) * 4.0 / 24.0, 1.0) * 100.0,
+    }
 
 
 def simulated_telecom_usage(purchases: float, monthly_income: float,
                             age: int) -> float:
     """Mock telecom provider summary, within the training range 0.20-0.98."""
-    consistency = min(max(purchases, 0.0) / 10.0, 1.0) * 100.0
-    account_type = 60.0 + 0.4 * consistency  # prepaid, adjusted by consistency
-    tenure = min(max(age - 18, 0) * 4.0 / 36.0, 1.0) * 100.0
-    recharge = min(max(monthly_income, 0.0) * 0.02 / 2500.0, 1.0) * 100.0
-    composite = (0.30 * consistency + 0.20 * account_type
-                 + 0.25 * tenure + 0.25 * recharge)
+    c = telecom_component_scores(purchases, monthly_income, age)
+    composite = (0.30 * c["recharge_consistency"] + 0.20 * c["account_type"]
+                 + 0.25 * c["sim_tenure"] + 0.25 * c["avg_recharge"])
     return round(min(max(composite / 100.0, _TELECOM_MIN), _TELECOM_MAX), 2)
 
 
 def simulated_wallet_activity(purchases: float, monthly_income: float,
                               debt_to_income: float) -> float:
     """Mock wallet provider summary, within the training range 0.10-0.95."""
-    frequency = min(max(purchases, 0.0) / 12.0, 1.0) * 100.0
-    balance = min(max(monthly_income, 0.0) * 0.40 / 60000.0, 1.0) * 100.0
-    inflow_outflow = min(
-        2.0 * (1.0 - min(max(debt_to_income, 0.0), 1.0)) * 50.0, 100.0)
-    account_age = min(max(purchases, 0.0) * 4.0 / 24.0, 1.0) * 100.0
-    composite = (0.30 * frequency + 0.25 * balance
-                 + 0.25 * inflow_outflow + 0.20 * account_age)
+    c = wallet_component_scores(purchases, monthly_income, debt_to_income)
+    composite = (0.30 * c["transaction_frequency"] + 0.25 * c["average_balance"]
+                 + 0.25 * c["inflow_outflow"] + 0.20 * c["account_age"])
     return round(min(max(composite / 100.0, _WALLET_MIN), _WALLET_MAX), 2)
 
 

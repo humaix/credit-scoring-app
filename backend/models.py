@@ -74,12 +74,16 @@ class Application(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     applicant_id: Mapped[int] = mapped_column(ForeignKey("applicants.id"), index=True)
 
-    # declared applicant profile snapshot consumed by the feature builder
+    # declared applicant profile snapshot consumed by the feature builder;
+    # loan history is NOT declared by the applicant any more — it is derived
+    # from the credit-information verification step and copied here when that
+    # step runs (nullable until then)
     age: Mapped[int] = mapped_column(Integer)
     occupation: Mapped[str] = mapped_column(String(40))
     monthly_income: Mapped[float] = mapped_column(Float)
     monthly_debt_payments: Mapped[float] = mapped_column(Float)
-    existing_loan_history: Mapped[str] = mapped_column(String(40))
+    existing_loan_history: Mapped[str | None] = mapped_column(
+        String(40), nullable=True)
     requested_loan_size: Mapped[float] = mapped_column(Float)
     digital_purchase_frequency: Mapped[int] = mapped_column(Integer)
 
@@ -105,6 +109,8 @@ class Application(Base):
     verification: Mapped["VerificationRecord"] = relationship(
         back_populates="application", uselist=False)
     employment: Mapped["EmploymentVerification"] = relationship(
+        back_populates="application", uselist=False)
+    credit_verification: Mapped["CreditVerification"] = relationship(
         back_populates="application", uselist=False)
     consent: Mapped["ConsentRecord"] = relationship(
         back_populates="application", uselist=False)
@@ -154,6 +160,44 @@ class EmploymentVerification(Base):
     application: Mapped["Application"] = relationship(back_populates="employment")
 
 
+class CreditVerification(Base):
+    """Credit-information verification record (spec task, section 5-7).
+
+    One record per application. The PROTOTYPE provider is a clearly labelled
+    mock (MockCreditVerificationService) — no eCIB or SBP-licensed bureau is
+    contacted. The stored provider name identifies which service produced the
+    record, so a real authorized provider can replace the mock later without
+    touching the scoring flow. The derived loan-history category is computed
+    deterministically by derive_loan_history() — never by the LLM.
+    """
+
+    __tablename__ = "credit_verifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    application_id: Mapped[int] = mapped_column(
+        ForeignKey("applications.id"), index=True, unique=True)
+    # identifies the verification source ("mock" today, a licensed bureau
+    # name once a real integration exists) — always shown with the demo label
+    provider: Mapped[str] = mapped_column(String(30), default="mock")
+    # the six mock credit-information fields (spec section 6)
+    has_previous_loan: Mapped[bool] = mapped_column(Boolean)
+    has_credit_card: Mapped[bool] = mapped_column(Boolean)
+    total_outstanding_amount: Mapped[float] = mapped_column(Float)
+    installments_paid_on_time: Mapped[int] = mapped_column(Integer)
+    has_overdue_or_default: Mapped[bool] = mapped_column(Boolean)
+    total_existing_debt: Mapped[float] = mapped_column(Float)
+    # deterministic mapping result — one of the model's four categories
+    derived_loan_history: Mapped[str] = mapped_column(String(40))
+    # flagged when the six fields contradict each other; the record is kept
+    # for review but never silently mapped to a misleading category
+    inconsistent: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow)
+
+    application: Mapped["Application"] = relationship(
+        back_populates="credit_verification")
+
+
 class VerificationRecord(Base):
     __tablename__ = "verification_records"
 
@@ -184,6 +228,10 @@ class ConsentRecord(Base):
     telecom_activity: Mapped[bool] = mapped_column(default=False)
     digital_transactions: Mapped[bool] = mapped_column(default=False)
     previous_loan_info: Mapped[bool] = mapped_column(default=False)
+    # credit-information verification consent (spec section 4): authorizes
+    # obtaining the applicant's credit information from SBP eCIB / an
+    # SBP-licensed bureau. Required before the verification step runs.
+    credit_information_verification: Mapped[bool] = mapped_column(default=False)
     # Phase 2: only meaningful (and only required) when the application
     # declared a bank account; False for alternative-data-only applications
     bank_account_data: Mapped[bool] = mapped_column(default=False)
@@ -221,6 +269,9 @@ class AssessmentResult(Base):
     all_contributions: Mapped[list] = mapped_column(JSON)
     # the ten validated model inputs, kept so the PDF can be re-rendered
     applicant_features: Mapped[dict] = mapped_column(JSON)
+    # applicant-facing interpretation blocks, built once at scoring time so
+    # the dashboard, the detail API and a re-rendered PDF always agree
+    interpretation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     explanation: Mapped[dict] = mapped_column(JSON)
     explanation_source: Mapped[str] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

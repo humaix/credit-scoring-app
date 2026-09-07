@@ -94,6 +94,9 @@ def assess_applicant(applicant):
             {"feature": FEATURE_LABELS[name], "value": format_feature_value(name, applicant[name])}
             for name in MODEL_FEATURES
         ],
+        # raw values by model feature name — powers the structured LLM payload
+        # and the applicant-facing interpretation blocks
+        "feature_values": {name: applicant[name] for name in MODEL_FEATURES},
         "positive_contributors": positives,
         "negative_contributors": negatives,
         "all_contributions": sorted(

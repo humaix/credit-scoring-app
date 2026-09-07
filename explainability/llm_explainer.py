@@ -13,31 +13,43 @@ import os
 import requests
 from dotenv import load_dotenv
 
-from explanation_utils import PROJECT_ROOT
+from explanation_utils import FEATURE_LABELS, PROJECT_ROOT
+from interpretation import build_feature_interpretation
 
 load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are a report writer for an AI credit-scoring prototype that estimates
-loan repayment scores (0-100) from alternative data. Your ONLY job is to convert
-structured model-contribution data into clear, professional English for an
-applicant-facing report.
+loan repayment scores (0-100) from alternative data. Your ONLY job is to turn
+already-validated, structured model-contribution data into clear, professional
+English for an applicant-facing report. You verbalize the given facts - you
+never create them.
 
 STRICT RULES:
-1. Use ONLY the information provided in the input. Never invent facts, values or effects.
+1. Use ONLY the information provided in the input. Never invent facts, values,
+   effects, sources or formulas.
 2. Never change the direction (sign) of any contribution.
 3. Never calculate, modify or question the repayment score - it is given to you.
-4. Never make loan approval or rejection decisions or recommendations.
+4. Never make loan approval or rejection decisions or recommendations, and
+   never give financial advice.
 5. Never claim certainty about future repayment or any outcome.
-6. Never make causal claims. Describe how features CONTRIBUTED to the model's score,
-   never what they will cause. GOOD: "had a negative contribution to the model's score".
-   BAD: "will cause you to default".
-7. Use the human-readable feature names exactly as given. Never mention internal
-   encodings, one-hot names or technical terms such as "SHAP".
-8. Do not exaggerate importance; a larger absolute contribution means a stronger influence.
-9. Use simple, professional, neutral language. Do not give financial advice.
-10. Treat every applicant the same way regardless of the score level.
+6. Never make causal claims. Describe how features CONTRIBUTED to the model's
+   score, never what they will cause. GOOD: "had a negative influence on the
+   model's score". BAD: "will cause you to default".
+7. Begin each factor sentence with the exact feature name given in the input.
+   Never mention internal encodings, one-hot names or technical terms such as
+   "SHAP", "TreeSHAP", "feature attribution" or "model coefficient".
+8. Do not exaggerate importance; a larger absolute contribution means a
+   stronger influence.
+9. Keep every applicant value exactly as provided (amounts, ratios, scores);
+   never round, convert or alter them.
+10. Use simple, professional, neutral language and treat every applicant the
+    same way regardless of the score level.
+11. Never claim that simulated or demo data (telecom, wallet or credit-history
+    information) comes from a real provider or credit bureau.
+12. Never state or imply that you classified the applicant's credit history -
+    the classification is always given to you as an input.
 
 OUTPUT FORMAT - return ONLY one valid JSON object, no extra text, no code fences:
 {
@@ -65,14 +77,41 @@ def _settings():
     }
 
 
+def _structured_factors(contributors, feature_values):
+    """Per-factor facts the LLM may only verbalize, never change (spec 17)."""
+    key_by_label = {label: key for key, label in FEATURE_LABELS.items()}
+    factors = []
+    for c in contributors:
+        key = key_by_label.get(c["feature"])
+        interp = (build_feature_interpretation(key, feature_values[key])
+                  if key is not None and key in feature_values else None)
+        factors.append({
+            "feature": c["feature"],
+            "value": c["value"],
+            "reference": (
+                interp["band"] or interp["reference_note"] or ""
+                if interp else ""),
+            "shap_direction": (
+                "positive" if c["shap_value"] > 0 else "negative"),
+            "shap_contribution": c["shap_value"],
+            "human_interpretation": (
+                interp["meaning"] if interp and interp["meaning"]
+                else "Declared applicant information."),
+        })
+    return factors
+
+
 def _llm_payload(assessment):
     """Minimum data needed for wording - nothing else is sent to the provider."""
+    feature_values = assessment.get("feature_values", {})
     return {
         "repayment_score": assessment["repayment_score"],
         "score_category": assessment["score_category"],
         "applicant_features": assessment["applicant_features"],
-        "positive_contributors": assessment["positive_contributors"],
-        "negative_contributors": assessment["negative_contributors"],
+        "positive_factors": _structured_factors(
+            assessment["positive_contributors"], feature_values),
+        "negative_factors": _structured_factors(
+            assessment["negative_contributors"], feature_values),
     }
 
 
@@ -105,27 +144,53 @@ def _extract_json(text):
     return json.loads(text[start:end + 1])
 
 
-def _validate_llm_explanation(parsed, n_positive, n_negative):
+# technical terms that must never surface in applicant-facing wording
+TECHNICAL_TERMS = ("shap", "treeshap", "feature attribution", "model coefficient")
+
+
+def _reject_technical_terms(text: str):
+    lowered = text.lower()
+    for term in TECHNICAL_TERMS:
+        if term in lowered:
+            raise ValueError(
+                f"LLM wording must not mention technical terms ({term!r})")
+
+
+def _validate_llm_explanation(parsed, payload):
+    """Structural + integrity checks; any violation falls back to templates."""
     if not isinstance(parsed, dict):
         raise ValueError("LLM response is not a JSON object")
     for key in RESPONSE_KEYS:
         if key not in parsed:
             raise ValueError(f"LLM response is missing key: {key}")
 
+    # every factor sentence must anchor to a known feature label, so the
+    # LLM cannot introduce feature names that do not exist in the input
+    known_labels = [f["feature"] for f in
+                    payload["positive_factors"] + payload["negative_factors"]]
+
     out = {}
     for key in ("summary", "overall_explanation"):
         value = str(parsed[key]).strip()
         if not value:
             raise ValueError(f"LLM response has an empty {key}")
+        _reject_technical_terms(value)
         out[key] = value
 
-    for key, expected in (("positive_factors", n_positive), ("negative_factors", n_negative)):
+    for key, factors in (("positive_factors", payload["positive_factors"]),
+                         ("negative_factors", payload["negative_factors"])):
         items = parsed[key]
         if not isinstance(items, list):
             raise ValueError(f"LLM response field {key} is not a list")
         strings = [str(item).strip() for item in items if str(item).strip()]
-        if expected > 0 and not strings:
+        if factors and not strings:
             raise ValueError(f"LLM response dropped existing {key}")
+        for sentence in strings:
+            _reject_technical_terms(sentence)
+            if known_labels and not any(
+                    label.lower() in sentence.lower() for label in known_labels):
+                raise ValueError(
+                    f"LLM response introduced an unknown feature in {key}")
         out[key] = strings[:3]  # never more than 3 factors per side
 
     return out
@@ -145,25 +210,25 @@ _FEATURE_SENTENCES = {
         "A debt-to-income ratio of {value} made a {strength} positive contribution to the model's repayment score, reflecting comparatively light existing debt obligations relative to income.",
         "A debt-to-income ratio of {value} made a {strength} negative contribution to the model's repayment score, as existing debt obligations take up a substantial share of income at this level.",
     ),
-    "Loan Size": (
-        "The requested loan size of {value} made a {strength} positive contribution to the model's repayment score for this profile.",
-        "The requested loan size of {value} made a {strength} negative contribution to the model's repayment score for this profile.",
+    "Requested Loan": (
+        "The requested loan amount of {value} made a {strength} positive contribution to the model's repayment score for this profile.",
+        "The requested loan amount of {value} made a {strength} negative contribution to the model's repayment score for this profile.",
     ),
-    "Telecom Usage Score": (
-        "A telecom usage score of {value} made a {strength} positive contribution to the model's repayment score.",
-        "A telecom usage score of {value} made a {strength} negative contribution to the model's repayment score.",
+    "Telecom Usage Indicator": (
+        "A telecom usage indicator of {value} made a {strength} positive contribution to the model's repayment score.",
+        "A telecom usage indicator of {value} made a {strength} negative contribution to the model's repayment score.",
     ),
-    "Mobile Wallet Activity": (
-        "A mobile wallet activity level of {value} made a {strength} positive contribution to the model's repayment score.",
-        "A mobile wallet activity level of {value} made a {strength} negative contribution to the model's repayment score.",
+    "Mobile Wallet Activity Indicator": (
+        "A mobile wallet activity indicator of {value} made a {strength} positive contribution to the model's repayment score.",
+        "A mobile wallet activity indicator of {value} made a {strength} negative contribution to the model's repayment score.",
     ),
-    "Digital Purchase Frequency": (
+    "Digital Purchase Pattern": (
         "A digital purchase frequency of {value} made a {strength} positive contribution to the model's repayment score.",
         "A digital purchase frequency of {value} made a {strength} negative contribution to the model's repayment score.",
     ),
-    "Psychometric Score": (
-        "A psychometric assessment score of {value} made a {strength} positive contribution to the model's repayment score.",
-        "A psychometric assessment score of {value} made a {strength} negative contribution to the model's repayment score.",
+    "Behavioral Assessment": (
+        "A behavioral assessment result of {value} made a {strength} positive contribution to the model's repayment score.",
+        "A behavioral assessment result of {value} made a {strength} negative contribution to the model's repayment score.",
     ),
     "Age": (
         "An age of {value} made a {strength} positive contribution to the model's repayment score.",
@@ -173,9 +238,9 @@ _FEATURE_SENTENCES = {
         "The applicant's occupation ({value}) made a {strength} positive contribution to the model's assessment.",
         "The applicant's occupation ({value}) made a {strength} negative contribution to the model's assessment.",
     ),
-    "Existing Loan History": (
-        "An existing loan history of '{value}' made a {strength} positive contribution to the model's assessment.",
-        "An existing loan history of '{value}' made a {strength} negative contribution to the model's assessment.",
+    "Credit History": (
+        "A credit history of '{value}' made a {strength} positive contribution to the model's assessment.",
+        "A credit history of '{value}' made a {strength} negative contribution to the model's assessment.",
     ),
 }
 
@@ -284,15 +349,12 @@ def generate_natural_language_explanation(assessment):
         raw = _post_chat_completion([
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content":
-                "Applicant model-contribution data:\n\n"
+                "Applicant model-contribution data (verbalize only - never "
+                "change any fact, value or direction):\n\n"
                 + json.dumps(payload, indent=2)
                 + "\n\nWrite the report explanation now. Return only the JSON object."},
         ])
-        parsed = _validate_llm_explanation(
-            _extract_json(raw),
-            len(payload["positive_contributors"]),
-            len(payload["negative_contributors"]),
-        )
+        parsed = _validate_llm_explanation(_extract_json(raw), payload)
         parsed["source"] = "llm"
         return parsed
     except Exception as exc:  # any problem -> safe templates, PDF still renders

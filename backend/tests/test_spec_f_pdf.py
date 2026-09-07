@@ -31,7 +31,9 @@ def test_report_is_generated(client, offline_explanations):
 
     content, text = _full_pdf_text(client, headers, application_id)
     assert content[:5] == b"%PDF-"
-    assert len(content) > 10_000  # a real multi-section report
+    # a real multi-section report (no embedded chart image - raw
+    # contribution numbers are hidden from applicants)
+    assert len(content) > 5_000
     assert len(text.strip()) > 500
     # the persisted file matches the filename the API reported
     assert (REPORTS_DIR / result["report_filename"]).exists()
@@ -101,5 +103,5 @@ def test_report_is_re_rendered_after_file_loss(client, offline_explanations):
     _, text = _full_pdf_text(client, headers, application_id)
     assert f"{result['repayment_score']:.1f}" in text
     # the regenerated file differs in metadata but keeps the substance
-    assert len(response.content) > 10_000
+    assert len(response.content) > 5_000
     assert original_bytes  # sanity: we did read the original before deleting

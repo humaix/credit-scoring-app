@@ -16,6 +16,10 @@ const BASE_CATEGORIES = [
   { key: "telecom_activity", title: "Telecom activity" },
   { key: "digital_transactions", title: "Digital transactions" },
   { key: "previous_loan_info", title: "Previous loan information" },
+  {
+    key: "credit_information_verification",
+    title: "Credit information verification (eCIB simulation)",
+  },
 ] as const;
 
 const BANK_CATEGORY = {
@@ -39,6 +43,7 @@ export default function ConsentPage() {
     telecom_activity: true,
     digital_transactions: true,
     previous_loan_info: true,
+    credit_information_verification: true,
     bank_account_data: true,
   });
   const [submitting, setSubmitting] = useState(false);
@@ -87,6 +92,10 @@ export default function ConsentPage() {
       await api.post("/api/consent", {
         application_id: app!.id,
         ...choices,
+        credit_information_verification: choices.credit_information_verification ?? true,
+      });
+      await api.post("/api/credit-verification", {
+        application_id: app!.id,
       });
       router.push("/assessment");
     } catch (err) {

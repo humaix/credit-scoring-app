@@ -30,3 +30,20 @@ Final Features :
 10) Moderating Variable
 
 explainability ke liye sirf detail ya paragraphs generate nahi karna balke AI se 1 report generate kar wani he jis me applicant ki details mention hon or uska repayment socre mention ho, reason bhi mention ho, or agar applicant ne large loan ki request ki thi jis pr uska score low aaya he to usse offer karen ke aap less ammount ke liye offer karen or less ammount ki range bhi batao 
+
+agr to user k pas salary slip he Employment letter/certificate , Bank statement, Employer verification he to uski employment status oor salary dono verify hojaynge
+business persons or self employed logon k liye 
+
+Bank statements
+Business documents
+Tax/financial documents, where applicable
+Business existence/income verification
+
+previous loan history verify karne k liye CIR se ye information li jayegi 
+
+Pehle koi loan liya?
+Credit card hai?
+Kitna outstanding hai?
+Installments time par pay ki?
+Koi overdue/default?
+Existing total debt kitna hai?

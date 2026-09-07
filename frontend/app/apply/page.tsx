@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import {
   api, setCurrentApp, formatPKR,
-  LOAN_HISTORY_OPTIONS, OCCUPATIONS, WALLET_PROVIDERS,
+  OCCUPATIONS, WALLET_PROVIDERS,
 } from "@/lib/api";
 import {
   Alert, Card, ErrorBox, Field, PrimaryButton, Stepper, inputClass,
@@ -22,7 +22,6 @@ interface FormState {
   occupation: string;
   monthly_income: string;
   monthly_debt_payments: string;
-  existing_loan_history: string;
   requested_loan_size: string;
   digital_purchase_frequency: string;
 }
@@ -37,7 +36,6 @@ const EMPTY: FormState = {
   occupation: "Salaried",
   monthly_income: "",
   monthly_debt_payments: "",
-  existing_loan_history: "No Previous Loan",
   requested_loan_size: "",
   digital_purchase_frequency: "",
 };
@@ -78,9 +76,9 @@ function validate(form: FormState): Record<string, string> {
     errors.monthly_debt_payments =
       "Monthly debt payments cannot be negative or exceed your monthly income.";
   }
-  if (!form.requested_loan_size || loan < 10000 || loan > 10000000) {
+  if (!form.requested_loan_size || loan < 50000 || loan > 1200000) {
     errors.requested_loan_size =
-      "Requested loan size must be between PKR 10,000 and PKR 10,000,000.";
+      "Requested loan amount must be between PKR 50,000 and PKR 1,200,000.";
   }
   if (
     form.digital_purchase_frequency === ""
@@ -124,7 +122,6 @@ export default function ApplyPage() {
           occupation: form.occupation,
           monthly_income: Number(form.monthly_income),
           monthly_debt_payments: Number(form.monthly_debt_payments),
-          existing_loan_history: form.existing_loan_history,
           requested_loan_size: Number(form.requested_loan_size),
           digital_purchase_frequency: Number(form.digital_purchase_frequency),
           has_bank_account: hasBank,
@@ -320,23 +317,9 @@ export default function ApplyPage() {
                 />
               </Field>
 
-              <Field label="Existing loan history">
-                <select
-                  className={inputClass}
-                  value={form.existing_loan_history}
-                  onChange={(e) => set("existing_loan_history", e.target.value)}
-                >
-                  {LOAN_HISTORY_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
               <Field
                 label="Requested loan size (PKR)"
-                hint={`Allowed: ${formatPKR(10000)} – ${formatPKR(10000000)}`}
+                hint="Requested loan amount must be between PKR 50,000 and PKR 1,200,000"
                 error={fieldErrors.requested_loan_size}
               >
                 <input
