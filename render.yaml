@@ -33,7 +33,7 @@ services:
         sync: false
       - key: LLM_MODEL
         sync: false
-      # DATABASE_URL is intentionally not set: the default SQLite file lives on
-      # the (ephemeral) instance disk, which is fine for demo data. For a
-      # persistent database add Render PostgreSQL and set
-      # DATABASE_URL=postgresql+psycopg2://... — see DEPLOYMENT.md.
+      # Required for accounts and sessions to survive instance replacement.
+      # Paste the provider connection URL in the Render dashboard.
+      - key: DATABASE_URL
+        sync: false

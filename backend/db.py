@@ -22,7 +22,7 @@ def _json_serializer(obj):
     )
 
 
-engine = create_engine(config.DATABASE_URL, json_serializer=_json_serializer, **_kwargs)
+engine = create_engine(config.DATABASE_URL, json_serializer=_json_serializer, pool_pre_ping=True, **_kwargs)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
