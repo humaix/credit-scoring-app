@@ -91,17 +91,37 @@ falls back to `http://localhost:8000` when the variable is unset (local dev).
 
 ## Data persistence
 
-- With the default SQLite, the database is a file on the instance disk.
-  **Render's free-tier disk is ephemeral** — demo data is lost when the
-  service redeploys or restarts. For a hackathon demo this is fine (users
-  simply register again; nothing sensitive is lost).
-- For a persistent database: create a Render PostgreSQL instance (or use
-  Supabase/Neon) and set `DATABASE_URL` to
-  `postgresql+psycopg2://<user>:<password>@<host>/<database>`.
-  The driver (`psycopg2-binary`) is already included in
-  `requirements-api.txt`, and the schema is created automatically on startup.
-- Generated PDF reports also live on the instance disk (regenerated
-  automatically from the persisted assessment if missing).
+Accounts and session tokens are stored in the backend database, not on Vercel.
+The frontend already defaults to **Remember me**, which retains the token in
+localStorage. If the backend loses its database, that token no longer identifies
+an account; changing browser storage cannot recover it.
+
+For an existing deployment:
+
+1. Provision a persistent PostgreSQL database and keep its connection URL private.
+   Use a database whose retention/lifetime meets your needs.
+2. If the existing SQLite database still contains accounts you need, back it up
+   and migrate those records before switching. A new PostgreSQL database starts
+   empty; this change does not copy old accounts or recover deleted data.
+3. In the **backend Render service → Environment**, set `DATABASE_URL` to the
+   provider's connection URL. `postgres://`, `postgresql://`, and
+   `postgresql+psycopg2://` are supported. Keep any provider SSL query parameters.
+   The driver is already in `requirements-api.txt`; tables are created at startup.
+4. Deploy the backend with this change. Existing manually configured services
+   must set the environment variable themselves; a GitHub merge or Vercel build
+   does not provision or connect a database. New Blueprint setups prompt for it.
+5. Register a test account, close and reopen the browser with Remember me enabled,
+   and confirm the dashboard works. Restart the backend, then confirm the same
+   account can still log in and its application history remains. Logging out
+   should require login again, never another registration.
+
+The backend warns when Render is still configured with SQLite. Local development
+continues to use SQLite. PostgreSQL connections are checked before reuse so stale
+pooled connections can be replaced.
+
+CNIC and employment images still use `UPLOADS_DIR` on the instance disk; database
+persistence alone does not preserve those files. Use persistent file storage for
+retained uploads. Generated PDF reports can be regenerated from stored assessments.
 
 ## Local development
 

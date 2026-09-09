@@ -1,12 +1,32 @@
 """Environment-based configuration for the backend API."""
 
 import os
+import warnings
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# SQLite locally; switch to PostgreSQL/Supabase via DATABASE_URL for deployment
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{PROJECT_ROOT / 'credit_scoring.db'}")
+def database_url() -> str:
+    """Accept provider URLs while keeping SQLite available for local work."""
+    value = os.getenv("DATABASE_URL", "").strip()
+    if not value:
+        value = f"sqlite:///{PROJECT_ROOT / 'credit_scoring.db'}"
+    for prefix in ("postgres://", "postgresql://"):
+        if value.startswith(prefix):
+            value = "postgresql+psycopg2://" + value[len(prefix):]
+            break
+    if os.getenv("RENDER") and value.startswith("sqlite"):
+        warnings.warn(
+            "SQLite on Render instance storage can lose accounts and sessions "
+            "after restart or redeploy. Set DATABASE_URL to a persistent "
+            "PostgreSQL database.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    return value
+
+
+DATABASE_URL = database_url()
 
 # comma-separated list of allowed browser origins (CORS)
 CORS_ORIGINS = [
