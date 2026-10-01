@@ -8,7 +8,7 @@ and identifiers (CNIC, mobile) never reach the ML model.
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -115,9 +115,19 @@ def verify_otp(db: Session, application: Application, code: str) -> dict:
     if record is None or record.status != "pending" or not record.otp_hash:
         raise ApiError(409, "no_pending_otp", "Request an OTP first")
 
+    # expired = (
+    #     record.otp_expires_at is None
+    #     or record.otp_expires_at < datetime.utcnow()
+    # )
+    expires_at = record.otp_expires_at
+
+    # Older records may store UTC without timezone information.
+    if expires_at is not None and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
     expired = (
-        record.otp_expires_at is None
-        or record.otp_expires_at < datetime.utcnow()
+        expires_at is None
+        or expires_at < datetime.now(timezone.utc)
     )
     if expired or record.otp_attempts >= config.OTP_MAX_ATTEMPTS:
         record.status = "failed"
